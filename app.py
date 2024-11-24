@@ -41,4 +41,5 @@ def translate_text():
     return jsonify({"translated_text": result['translatedText']})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
+    app.run(host='0.0.0.0', port=port)
