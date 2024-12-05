@@ -1,46 +1,96 @@
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-import os
+from flask import Flask, render_template, request, jsonify
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+import pandas as pd
+import json
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "https://tech0-gen-8-step3-app-py-10.azurewebsites.net"}})  # CORS設定を更新
-#CORS(app, resources={r"/api/*": {"origins": "https://tech0-gen-8-step3-testapp-node2-19.azurewebsites.net"}})  # CORS設定を更新
 
-@app.route('/', methods=['GET'])
-def hello():
-    return jsonify({'message': 'Flask start!'})
+# サービスアカウント認証情報
+SERVICE_ACCOUNT_FILE = 'service_account.json'
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
 
-@app.route('/api/hello', methods=['GET'])
-def hello_world():
-    return jsonify(message='Hello World by Flask')
+# スプレッドシートの設定
+DB_ID = '13W3SPt7KrGnYCLzC8DQ0QyoNhFFs8CEd4faHBhUSDww'
+DB_RANGE = 'DB!A:AE'
 
-@app.route('/api/multiply/<int:id>', methods=['GET'])
-def multiply(id):
-    print("multiply")
-    # idの2倍の数を計算
-    doubled_value = id * 2
-    return jsonify({"doubled_value": doubled_value})
+# Google API認証
+def authenticate_google_services():
+    with open(SERVICE_ACCOUNT_FILE, 'r') as f:
+        service_account_info = json.load(f)
+    credentials = service_account.Credentials.from_service_account_info(
+        service_account_info, scopes=SCOPES
+    )
+    return credentials
 
-@app.route('/api/echo', methods=['POST'])
-def echo():
-    print("echo")
-    data = request.get_json()  # JSONデータを取得
-    if data is None:
-        return jsonify({"error": "Invalid JSON"}), 400
-    # 'message' プロパティが含まれていることを確認
-    message = data.get('message', 'No message provided')
-    return jsonify({"message": f"echo: {message}"})
+# スプレッドシートからデータを取得する関数
+def get_spreadsheet_data(sheet_id, range_):
+    try:
+        credentials = authenticate_google_services()
+        sheets_service = build('sheets', 'v4', credentials=credentials)
+        sheet = sheets_service.spreadsheets()
+        result = sheet.values().get(spreadsheetId=sheet_id, range=range_).execute()
+        rows = result.get('values', [])
+        if rows:
+            headers = rows[0]
+            data = pd.DataFrame(rows[1:], columns=headers)
+            return data
+        else:
+            return pd.DataFrame()
+    except Exception as e:
+        print(f"Error retrieving spreadsheet data: {e}")
+        return pd.DataFrame()
 
-@app.route('/api/translate', methods=['POST'])
-def translate_text():
-    data = request.get_json()
-    text_to_translate = data['text']
+@app.route('/')
+def index():
+    df = get_spreadsheet_data(DB_ID, DB_RANGE)
 
-    # 日本語から英語への翻訳を実行
-    result = translate_client.translate(text_to_translate, target_language='en')
+    if df.empty:
+        return "スプレッドシートのデータが見つかりません。"
 
-    return jsonify({"translated_text": result['translatedText']})
+    # NaNを空文字に置き換え
+    df = df.fillna("")
+    df["食べログ点数"] = pd.to_numeric(df["食べログ点数"], errors='coerce')
+    df["Google点数"] = pd.to_numeric(df["Google点数"], errors='coerce')
+
+    # HTMLテンプレートにデータを渡す
+    return render_template('index.html', areas=df["エリア"].unique(), df=df.to_dict(orient='records'))
+
+@app.route('/search', methods=['POST'])
+def search():
+    df = get_spreadsheet_data(DB_ID, DB_RANGE)
+
+    if df.empty:
+        return jsonify({"error": "スプレッドシートのデータが見つかりません。"}), 400
+
+    df = df.fillna("")
+    df["食べログ点数"] = pd.to_numeric(df["食べログ点数"], errors='coerce')
+    df["Google点数"] = pd.to_numeric(df["Google点数"], errors='coerce')
+
+    data = request.json
+    area = data.get("area", "")
+    private_room = data.get("private_room", "指定なし")
+    budget_min = int(data.get("budget_min", 0))
+    budget_max = int(data.get("budget_max", 10000))
+
+    filtered_df = df[
+        (df["エリア"].str.contains(area)) &
+        (df["食べログ点数"].notna()) &
+        (df["Google点数"].notna()) &
+        (df["予算"].apply(lambda x: budget_min <= float(x) <= budget_max))
+    ]
+
+    if private_room != "指定なし":
+        filtered_df = filtered_df[filtered_df["個室"] == private_room]
+
+    sorted_df = filtered_df.sort_values(
+        by=["食べログ点数", "Google点数"], ascending=[False, False]
+    )
+
+    return jsonify(sorted_df.to_dict(orient="records"))
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=True)
