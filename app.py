@@ -125,7 +125,7 @@ def hello_world():
     return jsonify(message='Hello World by Flask')
 
 
-@app.route('/restaurants')
+@app.route('/api/restaurants')
 def get_restaurants():
     conn = sqlite3.connect('example.db')
     c = conn.cursor()
