@@ -171,6 +171,26 @@ def get_restaurants():
     restaurants = [dict(zip(column_names, row)) for row in rows]
     return jsonify({'restaurants': restaurants})
 
+@app.route('/api/restaurants/<int:restaurant_id>', methods=['GET'])
+def get_restaurant_details(restaurant_id):
+    """
+    指定されたレストランIDの詳細情報を取得するエンドポイント。
+    """
+    conn = sqlite3.connect('example.db')
+    c = conn.cursor()
+
+    # 特定のレストランを取得
+    c.execute('SELECT * FROM restaurants WHERE id = ?', (restaurant_id,))
+    row = c.fetchone()
+    conn.close()
+
+    if row:
+        # カラム名をキーとして辞書形式に変換
+        column_names = [desc[0] for desc in c.description]
+        restaurant = dict(zip(column_names, row))
+        return jsonify(restaurant)
+    else:
+        return jsonify({'error': '指定されたレストランが見つかりませんでした。'}), 404
 
 if __name__ == '__main__':
     init_db()  # アプリ起動時にDBを初期化
