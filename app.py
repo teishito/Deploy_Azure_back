@@ -128,13 +128,45 @@ def hello_world():
 
 @app.route('/api/restaurants')
 def get_restaurants():
+    if request.method == 'POST':
+        filters = request.json
+        area = filters.get('area', '')
+        genre = filters.get('genre', '')
+        people = filters.get('people', '')
+
+        query = 'SELECT * FROM restaurants WHERE 1=1'
+        params = []
+
+        if area:
+            query += ' AND area = ?'
+            params.append(area)
+        if genre:
+            query += ' AND category LIKE ?'
+            params.append(f'%{genre}%')
+        if people:
+            query += ' AND capacity >= ?'
+            params.append(people)
+
+        conn = sqlite3.connect('example.db')
+        c = conn.cursor()
+        c.execute(query, params)
+        rows = c.fetchall()
+        conn.close()
+
+        column_names = [desc[0] for desc in c.description]
+        restaurants = [dict(zip(column_names, row)) for row in rows]
+        return jsonify({'restaurants': restaurants})
+    
+    # GETメソッドの場合
     conn = sqlite3.connect('example.db')
     c = conn.cursor()
     c.execute('SELECT * FROM restaurants')
-    restaurants = c.fetchall()
+    rows = c.fetchall()
     conn.close()
 
-    return jsonify(restaurants)
+    column_names = [desc[0] for desc in c.description]
+    restaurants = [dict(zip(column_names, row)) for row in rows]
+    return jsonify({'restaurants': restaurants})
 
 
 if __name__ == '__main__':
