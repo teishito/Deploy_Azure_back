@@ -127,13 +127,15 @@ def hello_world():
 
 
 @app.route('/api/restaurants')
+@app.route('/api/restaurants', methods=['GET', 'POST'])
 def get_restaurants():
     if request.method == 'POST':
-        filters = request.json
+        filters = request.json  # POSTリクエストのボディを取得
         area = filters.get('area', '')
         genre = filters.get('genre', '')
-        people = filters.get('people', '')
+        people = filters.get('people', 0)
 
+        # データベースクエリに基づいてフィルタリング
         query = 'SELECT * FROM restaurants WHERE 1=1'
         params = []
 
@@ -153,11 +155,12 @@ def get_restaurants():
         rows = c.fetchall()
         conn.close()
 
+        # レスポンス用にデータを整形
         column_names = [desc[0] for desc in c.description]
         restaurants = [dict(zip(column_names, row)) for row in rows]
         return jsonify({'restaurants': restaurants})
-    
-    # GETメソッドの場合
+
+    # GETメソッド用の処理
     conn = sqlite3.connect('example.db')
     c = conn.cursor()
     c.execute('SELECT * FROM restaurants')
