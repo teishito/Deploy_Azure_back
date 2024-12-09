@@ -8,7 +8,6 @@ from googleapiclient.discovery import build
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "https://tech0-gen-8-step3-app-py-10.azurewebsites.net"}})  # CORS設定を更新
-#CORS(app, resources={r"/api/*": {"origins": "https://tech0-gen-8-step3-testapp-node2-19.azurewebsites.net"}})  # CORS設定を更新
 
 # Google Sheets API認証
 SERVICE_ACCOUNT_FILE = 'service_account.json'  # サービスアカウントのJSONファイルのパス
@@ -108,13 +107,15 @@ def index():
     data, headers = get_spreadsheet_data()
 
     if not data:
-        return "スプレッドシートのデータが見つかりません。"
+        return jsonify({'error': 'スプレッドシートのデータが見つかりません。'})
 
-    # データをSQLiteに保存
-    insert_data_to_db(data, headers)
-
-    return "データがデータベースに保存されました。"
-    
+    try:
+        # データをSQLiteに保存
+        insert_data_to_db(data, headers)
+        return jsonify({'message': 'データがデータベースに保存されました。'})
+    except Exception as e:
+        return jsonify({'error': f'データベース保存中にエラーが発生しました: {str(e)}'})
+        
 
 @app.route('/', methods=['GET'])
 def hello():
