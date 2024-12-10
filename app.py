@@ -116,7 +116,6 @@ def index():
     except Exception as e:
         return jsonify({'error': f'データベース保存中にエラーが発生しました: {str(e)}'})
         
-
 @app.route('/', methods=['GET'])
 def hello():
     return jsonify({'message': 'Flask start!'})
@@ -126,71 +125,25 @@ def hello_world():
     return jsonify(message='Hello World by Flask')
 
 
-@app.route('/api/restaurants')
-@app.route('/api/restaurants', methods=['GET', 'POST'])
-def get_restaurants():
-    if request.method == 'POST':
-        filters = request.json  # POSTリクエストのボディを取得
-        area = filters.get('area', '')
-        genre = filters.get('genre', '')
-        people = filters.get('people', 0)
-
-        # データベースクエリに基づいてフィルタリング
-        query = 'SELECT * FROM restaurants WHERE 1=1'
-        params = []
-
-        if area:
-            query += ' AND area = ?'
-            params.append(area)
-        if genre:
-            query += ' AND category LIKE ?'
-            params.append(f'%{genre}%')
-        if people:
-            query += ' AND capacity >= ?'
-            params.append(people)
-
-        conn = sqlite3.connect('example.db')
-        c = conn.cursor()
-        c.execute(query, params)
-        rows = c.fetchall()
-        conn.close()
-
-        # レスポンス用にデータを整形
-        column_names = [desc[0] for desc in c.description]
-        restaurants = [dict(zip(column_names, row)) for row in rows]
-        return jsonify({'restaurants': restaurants})
-
-    # GETメソッド用の処理
+@app.route('/api/areas', methods=['GET'])
+def get_areas():
     conn = sqlite3.connect('example.db')
-    c = conn.cursor()
-    c.execute('SELECT * FROM restaurants')
-    rows = c.fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT area FROM restaurants")
+    rows = cursor.fetchall()
     conn.close()
+    areas = [row[0] for row in rows]
+    return jsonify(areas)
 
-    column_names = [desc[0] for desc in c.description]
-    restaurants = [dict(zip(column_names, row)) for row in rows]
-    return jsonify({'restaurants': restaurants})
-
-@app.route('/api/restaurants/<int:restaurant_id>', methods=['GET'])
-def get_restaurant_details(restaurant_id):
-    """
-    指定されたレストランIDの詳細情報を取得するエンドポイント。
-    """
+@app.route('/api/genres', methods=['GET'])
+def get_genres():
     conn = sqlite3.connect('example.db')
-    c = conn.cursor()
-
-    # 特定のレストランを取得
-    c.execute('SELECT * FROM restaurants WHERE id = ?', (restaurant_id,))
-    row = c.fetchone()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT category FROM restaurants")
+    rows = cursor.fetchall()
     conn.close()
-
-    if row:
-        # カラム名をキーとして辞書形式に変換
-        column_names = [desc[0] for desc in c.description]
-        restaurant = dict(zip(column_names, row))
-        return jsonify(restaurant)
-    else:
-        return jsonify({'error': '指定されたレストランが見つかりませんでした。'}), 404
+    genres = [row[0] for row in rows]
+    return jsonify(genres)
 
 @app.route('/api/search', methods=['GET'])
 def search_restaurants():
@@ -279,7 +232,52 @@ def search_restaurants():
         return jsonify({"error": f"Database error: {str(e)}"}), 500
     except Exception as e:
         return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
-        
+
+@app.route('/restaurant/<int:id>', methods=['GET'])
+def get_restaurant(id):
+    conn = sqlite3.connect('example.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM restaurants WHERE id = ?", (id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row is None:
+        return jsonify({'error': 'Restaurant not found'}), 404
+
+    restaurant = {
+        "id": row[0],
+        "name": row[1],
+        "address": row[2],
+        "phone_number": row[3],
+        "tabelog_rating": row[4],
+        "tabelog_review_count": row[5],
+        "tabelog_link": row[6],
+        "google_rating": row[7],
+        "google_review_count": row[8],
+        "google_link": row[9],
+        "opening_hours": row[10],
+        "course": row[11],
+        "menu": row[12],
+        "drink_menu": row[13],
+        "store_top_image": row[14],
+        "description": row[15],
+        "longitude": row[16],
+        "latitude": row[17],
+        "area": row[18],
+        "nearest_station": row[19],
+        "directions": row[20],
+        "capacity": row[21],
+        "category": row[22],
+        "budget_min": row[23],
+        "budget_max": row[24],
+        "has_private_room": row[25],
+        "has_drink_all_included": row[26],
+        "detail_image1": row[27],
+        "detail_image2": row[28],
+        "detail_image3": row[29],
+    }
+    return jsonify(restaurant)
+
 if __name__ == '__main__':
     init_db()  # アプリ起動時にDBを初期化
     port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
