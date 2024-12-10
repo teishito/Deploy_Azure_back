@@ -192,7 +192,7 @@ def get_restaurant_details(restaurant_id):
     else:
         return jsonify({'error': '指定されたレストランが見つかりませんでした。'}), 404
 
-@app.route('/search', methods=['GET'])
+@app.route('/api/search', methods=['GET'])
 def search_restaurants():
     # クエリパラメータを取得
     area = request.args.get('area', '')  # エリア
