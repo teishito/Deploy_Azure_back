@@ -138,88 +138,97 @@ def get_genres():
 
 @app.route('/results', methods=['GET'])
 def results_restaurants():
-    # クエリパラメータを取得
-    area = request.args.get('area', '')  # エリア
-    guests = request.args.get('guests', None, type=int)  # 人数
-    genre = request.args.get('genre', '')  # ジャンル
-    budget_min = request.args.get('budgetMin', None, type=int)  # 予算の下限
-    budget_max = request.args.get('budgetMax', None, type=int)  # 予算の上限
-    private_room = request.args.get('privateRoom', '')  # 個室の希望
-    drink_included = request.args.get('drinkIncluded', '')  # 飲み放題の希望
+    try:
+        # クエリパラメータを取得
+        area = request.args.get('area', '')  # エリア
+        guests = request.args.get('guests', None, type=int)  # 人数
+        genre = request.args.get('genre', '')  # ジャンル
+        budget_min = request.args.get('budgetMin', None, type=int)  # 予算の下限
+        budget_max = request.args.get('budgetMax', None, type=int)  # 予算の上限
+        private_room = request.args.get('privateRoom', '')  # 個室の希望
+        drink_included = request.args.get('drinkIncluded', '')  # 飲み放題の希望
 
-    # SQLクエリの構築
-    query = "SELECT * FROM restaurants WHERE 1=1"
-    params = []
+        # SQLクエリの構築
+        query = "SELECT * FROM restaurants WHERE 1=1"
+        params = []
 
-    # エリアは必須条件
-    if area:
-        query += " AND area = ?"
-        params.append(area)
-    
-    # その他の条件は任意
-    if guests is not None:
-        query += " AND capacity >= ?"
-        params.append(guests)
-    if genre:
-        query += " AND category LIKE ?"
-        params.append(f"%{genre}%")
-    if budget_min is not None:
-        query += " AND budget_min >= ?"
-        params.append(budget_min)
-    if budget_max is not None:
-        query += " AND budget_max <= ?"
-        params.append(budget_max)
-    if private_room:
-        query += " AND has_private_room = ?"
-        params.append(private_room)
-    if drink_included:
-        query += " AND has_drink_all_included = ?"
-        params.append(drink_included)
+        if area:
+            query += " AND area = ?"
+            params.append(area)
+        if guests is not None:
+            query += " AND capacity >= ?"
+            params.append(guests)
+        if genre:
+            query += " AND category LIKE ?"
+            params.append(f"%{genre}%")
+        if budget_min is not None:
+            query += " AND budget_min >= ?"
+            params.append(budget_min)
+        if budget_max is not None:
+            query += " AND budget_max <= ?"
+            params.append(budget_max)
+        if private_room:
+            query += " AND has_private_room = ?"
+            params.append(private_room)
+        if drink_included:
+            query += " AND has_drink_all_included = ?"
+            params.append(drink_included)
 
-    # データベース接続とクエリの実行
-    conn = sqlite3.connect('example.db')
-    cursor = conn.cursor()
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    conn.close()
+        # データベース接続とクエリの実行
+        conn = sqlite3.connect('example.db')
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
 
-    # データを整形して返却
-    result = [
-        {
-            "id": row[0],
-            "name": row[1],
-            "address": row[2],
-            "phone_number": row[3],
-            "tabelog_rating": row[4],
-            "tabelog_review_count": row[5],
-            "tabelog_link": row[6],
-            "google_rating": row[7],
-            "google_review_count": row[8],
-            "google_link": row[9],
-            "opening_hours": row[10],
-            "course": row[11],
-            "menu": row[12],
-            "drink_menu": row[13],
-            "store_top_image": row[14],
-            "description": row[15],
-            "longitude": row[16],
-            "latitude": row[17],
-            "area": row[18],
-            "nearest_station": row[19],
-            "directions": row[20],
-            "capacity": row[21],
-            "category": row[22],
-            "budget_min": row[23],
-            "budget_max": row[24],
-            "has_private_room": row[25],
-            "has_drink_all_included": row[26],
-            "detail_image1": row[27],
-            "detail_image2": row[28],
-            "detail_image3": row[29],
-        }
-        for row in rows
-    ]
-    return jsonify(result)
+        # 結果が空の場合のハンドリング
+        if not rows:
+            return jsonify({"message": "条件に一致するレストランが見つかりませんでした。"}), 404
+
+        # データを整形して返却
+        result = [
+            {
+                "id": row[0],
+                "name": row[1],
+                "address": row[2],
+                "phone_number": row[3],
+                "tabelog_rating": row[4],
+                "tabelog_review_count": row[5],
+                "tabelog_link": row[6],
+                "google_rating": row[7],
+                "google_review_count": row[8],
+                "google_link": row[9],
+                "opening_hours": row[10],
+                "course": row[11],
+                "menu": row[12],
+                "drink_menu": row[13],
+                "store_top_image": row[14],
+                "description": row[15],
+                "longitude": row[16],
+                "latitude": row[17],
+                "area": row[18],
+                "nearest_station": row[19],
+                "directions": row[20],
+                "capacity": row[21],
+                "category": row[22],
+                "budget_min": row[23],
+                "budget_max": row[24],
+                "has_private_room": row[25],
+                "has_drink_all_included": row[26],
+                "detail_image1": row[27],
+                "detail_image2": row[28],
+                "detail_image3": row[29],
+            }
+            for row in rows
+        ]
+        return jsonify(result)
+
+    except sqlite3.Error as e:
+        logging.error(f"Database error: {e}")
+        return jsonify({"error": "データベースエラーが発生しました。"}), 500
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return jsonify({"error": "予期しないエラーが発生しました。"}), 500
 
 @app.route('/restaurant/<int:id>', methods=['GET'])
 def get_restaurant_by_id(id):
