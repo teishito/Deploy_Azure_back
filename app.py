@@ -160,60 +160,46 @@ def get_genres():
 
 @app.route('/search', methods=['GET'])
 def search_restaurants():
-    try:
-        # クエリパラメータを取得
-        area = request.args.get('area', '') or None
-        guests = request.args.get('guests', None, type=int) or None
-        genre = request.args.get('genre', '') or None
-        budget_min = request.args.get('budgetMin', None, type=int) or None
-        budget_max = request.args.get('budgetMax', None, type=int) or None
-        private_room = request.args.get('privateRoom', '') or None
-        drink_included = request.args.get('drinkIncluded', '') or None
+    area = request.args.get('area', None)
+    guests = request.args.get('guests', None, type=int)
+    genre = request.args.get('genre', None)
+    budget_min = request.args.get('budgetMin', None, type=int)
+    budget_max = request.args.get('budgetMax', None, type=int)
+    private_room = request.args.get('privateRoom', None)
+    drink_included = request.args.get('drinkIncluded', None)
 
-        # SQLクエリの構築
-        query = "SELECT * FROM restaurants WHERE 1=1"
-        params = []
+    query = "SELECT * FROM restaurants WHERE 1=1"
+    params = []
+    if area:
+        query += " AND area = ?"
+        params.append(area)
+    if guests:
+        query += " AND capacity >= ?"
+        params.append(guests)
+    if genre:
+        query += " AND category LIKE ?"
+        params.append(f"%{genre}%")
+    if budget_min:
+        query += " AND budget_min >= ?"
+        params.append(budget_min)
+    if budget_max:
+        query += " AND budget_max <= ?"
+        params.append(budget_max)
+    if private_room:
+        query += " AND has_private_room = ?"
+        params.append(private_room)
+    if drink_included:
+        query += " AND has_drink_all_included = ?"
+        params.append(drink_included)
 
-        if area:
-            query += " AND area = ?"
-            params.append(area)
-        if guests is not None:
-            query += " AND capacity >= ?"
-            params.append(guests)
-        if genre:
-            query += " AND category LIKE ?"
-            params.append(f"%{genre}%")
-        if budget_min is not None:
-            query += " AND budget_min >= ?"
-            params.append(budget_min)
-        if budget_max is not None:
-            query += " AND budget_max <= ?"
-            params.append(budget_max)
-        if private_room:
-            query += " AND has_private_room = ?"
-            params.append(private_room)
-        if drink_included:
-            query += " AND has_drink_all_included = ?"
-            params.append(drink_included)
+    conn = sqlite3.connect('example.db')
+    cursor = conn.cursor()
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
 
-        # データベース接続とクエリの実行
-        conn = sqlite3.connect('example.db')
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-
-        # データを整形して返却
-        result = [
-            {"id": row[0], "name": row[1], "address": row[2], "phone_number": row[3],
-             "tabelog_rating": row[4], "google_rating": row[7], "area": row[18], "capacity": row[21]}
-            for row in rows
-        ]
-        return jsonify(result)
-    except Exception as e:
-        logging.error(f"検索処理中にエラーが発生: {e}")
-        return jsonify({'error': f'検索処理中にエラーが発生しました: {str(e)}'})
-    finally:
-        conn.close()
+    results = [{"id": row[0], "name": row[1]} for row in rows]
+    return jsonify(results)
 
 @app.route('/restaurant/<int:id>', methods=['GET'])
 def get_restaurant_by_id(id):
