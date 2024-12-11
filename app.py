@@ -5,6 +5,10 @@ import sqlite3
 import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import logging
+
+# ログ設定
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # CORS設定を更新
@@ -121,6 +125,10 @@ def index():
 def hello():
     return jsonify({'message': 'Flask start!'})
 
+@app.route('/test', methods=['GET'])
+def test():
+    return jsonify({'message': 'Test endpoint is working!'})
+
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
     return jsonify(message='Hello World by Flask')
@@ -150,13 +158,13 @@ def get_genres():
 def search_restaurants():
     try:
         # クエリパラメータを取得
-        area = request.args.get('area', '')
-        guests = request.args.get('guests', None, type=int)
-        genre = request.args.get('genre', '')
-        budget_min = request.args.get('budgetMin', None, type=int)
-        budget_max = request.args.get('budgetMax', None, type=int)
-        private_room = request.args.get('privateRoom', '')
-        drink_included = request.args.get('drinkIncluded', '')
+        area = request.args.get('area', '') or None
+        guests = request.args.get('guests', None, type=int) or None
+        genre = request.args.get('genre', '') or None
+        budget_min = request.args.get('budgetMin', None, type=int) or None
+        budget_max = request.args.get('budgetMax', None, type=int) or None
+        private_room = request.args.get('privateRoom', '') or None
+        drink_included = request.args.get('drinkIncluded', '') or None
 
         # SQLクエリの構築
         query = "SELECT * FROM restaurants WHERE 1=1"
