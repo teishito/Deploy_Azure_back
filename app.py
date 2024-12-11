@@ -136,8 +136,8 @@ def get_genres():
     return jsonify(genres)
 
 
-@app.route('/search', methods=['GET'])
-def search_restaurants():
+@app.route('/results', methods=['GET'])
+def results_restaurants():
     # クエリパラメータを取得
     area = request.args.get('area', '')  # エリア
     guests = request.args.get('guests', None, type=int)  # 人数
