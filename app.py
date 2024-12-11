@@ -124,7 +124,7 @@ def search_restaurants():
     return jsonify(result)
 
 @app.route('/restaurant/<int:id>', methods=['GET'])
-def get_restaurant(id):
+def get_restaurant_by_id(id):
     conn = sqlite3.connect('example.db')
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM restaurants WHERE id = ?", (id,))
@@ -132,6 +132,7 @@ def get_restaurant(id):
     conn.close()
 
     if row is None:
+        print("No data found for this ID")
         return jsonify({'error': 'Restaurant not found'}), 404
 
     restaurant = {
@@ -169,6 +170,5 @@ def get_restaurant(id):
     return jsonify(restaurant)
     
 if __name__ == '__main__':
-    init_db()  # アプリ起動時にDBを初期化
     port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
     app.run(host='0.0.0.0', port=port)
