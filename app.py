@@ -275,7 +275,11 @@ def get_restaurant_by_id(id):
         "detail_image3": row[29],
     }
     return jsonify(restaurant)
-    
+
+@app.route('/list-endpoints', methods=['GET'])
+def list_endpoints():
+    return jsonify([str(rule) for rule in app.url_map.iter_rules()])
+
 if __name__ == '__main__':
     init_db()  # アプリ起動時にDBを初期化
     port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
