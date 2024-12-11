@@ -129,6 +129,10 @@ def hello():
 def test():
     return jsonify({'message': 'Test endpoint is working!'})
 
+@app.route('/list-endpoints', methods=['GET'])
+def list_endpoints():
+    return jsonify([str(rule) for rule in app.url_map.iter_rules()])
+
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
     return jsonify(message='Hello World by Flask')
