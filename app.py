@@ -13,46 +13,57 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # CORS設定を更新
 
-# Google Sheets API認証
-SERVICE_ACCOUNT_FILE = 'service_account.json'  # サービスアカウントのJSONファイルのパス
+# Google Sheets API 認証情報
+SERVICE_ACCOUNT_FILE = 'service_account.json'
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 
 # スプレッドシートの設定
 SHEET_ID = '13W3SPt7KrGnYCLzC8DQ0QyoNhFFs8CEd4faHBhUSDww'
-SHEET_RANGE = 'DB!A:AC'  # 取得する範囲
+SHEET_RANGE = 'DB!A:AC'
 
 def authenticate_google_services():
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    return credentials
+    """Google Sheets APIを認証"""
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES
+        )
+        logging.info("Google Sheets API認証に成功しました。")
+        return credentials
+    except Exception as e:
+        logging.error(f"Google Sheets API認証に失敗しました: {e}")
+        raise
 
 def get_spreadsheet_data():
+    """スプレッドシートからデータを取得"""
     try:
         credentials = authenticate_google_services()
         service = build('sheets', 'v4', credentials=credentials)
         sheet = service.spreadsheets()
         result = sheet.values().get(spreadsheetId=SHEET_ID, range=SHEET_RANGE).execute()
         rows = result.get('values', [])
+
         if rows:
             headers = rows[0]
             data = rows[1:]
-            logging.info(f"Fetched {len(data)} rows from Google Sheets.")
+            logging.info(f"スプレッドシートから{len(data)}行のデータを取得しました。")
             return data, headers
-        logging.warning("No data found in the spreadsheet.")
+        logging.warning("スプレッドシートにデータが存在しません。")
         return [], []
     except Exception as e:
-        logging.error(f"Error fetching data from Google Sheets: {e}")
+        logging.error(f"スプレッドシートデータの取得に失敗しました: {e}")
         return [], []
 
-def init_db():
+def init_db(recreate=False):
+    """SQLite3データベースを初期化"""
     try:
         conn = sqlite3.connect('example.db')
         c = conn.cursor()
 
-        # 既存のテーブルを削除
-        c.execute('DROP TABLE IF EXISTS restaurants')
+        if recreate:
+            c.execute('DROP TABLE IF EXISTS restaurants')
+            logging.info("既存のテーブルを削除しました。")
 
-        # 新しいテーブルを作成
+        # テーブルの作成
         c.execute('''
             CREATE TABLE IF NOT EXISTS restaurants (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,36 +99,35 @@ def init_db():
             )
         ''')
         conn.commit()
-        logging.info("Database initialized successfully.")
+        logging.info("データベースを初期化しました。")
     except sqlite3.Error as e:
-        logging.error(f"Error initializing database: {e}")
+        logging.error(f"データベース初期化中にエラーが発生しました: {e}")
     finally:
         conn.close()
 
 def insert_data_to_db(data, headers):
+    """スプレッドシートのデータをSQLite3に挿入"""
     try:
         conn = sqlite3.connect('example.db')
         c = conn.cursor()
 
-        # データを挿入
         for row in data:
             if len(row) < 29:
-                row += [''] * (29 - len(row))  # 足りない分を空文字で補完
-
+                row += [''] * (29 - len(row))  # 不足分を補完
             c.execute('''
                 INSERT INTO restaurants (
-                    name, address, phone_number, tabelog_rating, tabelog_review_count, tabelog_link, google_rating, 
-                    google_review_count, google_link, opening_hours, course, menu, drink_menu, store_top_image, 
-                    description, longitude, latitude, area, nearest_station, directions, capacity, category, 
-                    budget_min, budget_max, has_private_room, has_drink_all_included, detail_image1, detail_image2, 
+                    name, address, phone_number, tabelog_rating, tabelog_review_count, tabelog_link, google_rating,
+                    google_review_count, google_link, opening_hours, course, menu, drink_menu, store_top_image,
+                    description, longitude, latitude, area, nearest_station, directions, capacity, category,
+                    budget_min, budget_max, has_private_room, has_drink_all_included, detail_image1, detail_image2,
                     detail_image3
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', tuple(row))
-
+        
         conn.commit()
-        logging.info(f"{len(data)} rows inserted into the database successfully.")
+        logging.info(f"データベースに{len(data)}行のデータを挿入しました。")
     except sqlite3.Error as e:
-        logging.error(f"Database insertion error: {e}")
+        logging.error(f"データ挿入中にエラーが発生しました: {e}")
     finally:
         conn.close()
 
@@ -164,15 +174,18 @@ def get_genres():
 
 @app.route('/results', methods=['GET'])
 def results_restaurants():
+    """
+    クエリパラメータに基づいて SQLite3 データベースからレストラン情報を取得。
+    """
     try:
-        # クエリパラメータを取得
+        # クエリパラメータの取得
         area = request.args.get('area', '')  # エリア
         guests = request.args.get('guests', None, type=int)  # 人数
         genre = request.args.get('genre', '')  # ジャンル
-        budget_min = request.args.get('budgetMin', None, type=int)  # 予算の下限
-        budget_max = request.args.get('budgetMax', None, type=int)  # 予算の上限
-        private_room = request.args.get('privateRoom', '')  # 個室の希望
-        drink_included = request.args.get('drinkIncluded', '')  # 飲み放題の希望
+        budget_min = request.args.get('budgetMin', None, type=int)  # 予算下限
+        budget_max = request.args.get('budgetMax', None, type=int)  # 予算上限
+        private_room = request.args.get('privateRoom', '').lower()  # 個室希望
+        drink_included = request.args.get('drinkIncluded', '').lower()  # 飲み放題希望
 
         # SQLクエリの構築
         query = "SELECT * FROM restaurants WHERE 1=1"
@@ -193,26 +206,27 @@ def results_restaurants():
         if budget_max is not None:
             query += " AND budget_max <= ?"
             params.append(budget_max)
-        if private_room:
+        if private_room in ['yes', 'no']:
             query += " AND has_private_room = ?"
             params.append(private_room)
-        if drink_included:
+        if drink_included in ['yes', 'no']:
             query += " AND has_drink_all_included = ?"
             params.append(drink_included)
 
         # データベース接続とクエリの実行
         conn = sqlite3.connect('example.db')
         cursor = conn.cursor()
+        logging.info(f"Executing SQL: {query} with params {params}")
         cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
 
-        # 結果が空の場合のハンドリング
+        # 結果が空の場合の処理
         if not rows:
-            logging.info("No results found for the given parameters.")
-            return jsonify({"message": "条件に一致するレストランが見つかりませんでした。", "results": []}), 404
+            logging.info("No matching restaurants found.")
+            return jsonify({"message": "条件に一致するレストランが見つかりませんでした。", "results": []}), 200
 
-        # データを整形して返却
+        # データの整形
         result = [
             {
                 "id": row[0],
@@ -248,6 +262,9 @@ def results_restaurants():
             }
             for row in rows
         ]
+
+        # JSONレスポンスを返却
+        logging.info(f"Found {len(result)} matching restaurants.")
         return jsonify({"results": result}), 200
 
     except sqlite3.Error as e:
@@ -308,9 +325,15 @@ def list_endpoints():
     return jsonify([str(rule) for rule in app.url_map.iter_rules()])
 
 if __name__ == '__main__':
-    init_db()  # アプリ起動時にDBを初期化
+    # DBの初期化（再作成オプションを指定）
+    init_db(recreate=True)
+
+    # Google Sheetsからデータを取得してDBに保存
     data, headers = get_spreadsheet_data()
     if data:
         insert_data_to_db(data, headers)
+    else:
+        logging.warning("挿入可能なデータがありませんでした。")
+        
     port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
     app.run(host='0.0.0.0', port=port)
