@@ -256,7 +256,66 @@ def results_restaurants():
     except sqlite3.Error as e:
         logging.error(f"Database error: {e}")
         return jsonify({"error": "データベースエラーが発生しました。"}), 500
-        
+
+@app.route('/api/restaurants', methods=['GET', 'POST'])
+def get_restaurants():
+    conn = sqlite3.connect('example.db')
+    c = conn.cursor()
+
+    if request.method == 'POST':
+        filters = request.json  # POSTリクエストのボディを取得
+        area = filters.get('area', '').strip()
+        genre = filters.get('genre', '').strip()
+        people = filters.get('people', 0)
+
+        # SQLクエリの構築
+        query = 'SELECT * FROM restaurants WHERE 1=1'
+        params = []
+
+        if area:
+            query += ' AND area = ?'
+            params.append(area)
+        if genre:
+            query += ' AND category LIKE ?'
+            params.append(f'%{genre}%')
+        if people:
+            query += ' AND capacity >= ?'
+            params.append(people)
+
+        try:
+            c.execute(query, params)
+            rows = c.fetchall()
+        except sqlite3.Error as e:
+            conn.close()
+            return jsonify({'error': f'Database error: {str(e)}'}), 500
+        finally:
+            conn.close()
+
+        # レスポンス用の整形
+        if not rows:
+            return jsonify({'restaurants': []}), 200  # 結果がない場合
+
+        column_names = [desc[0] for desc in c.description]
+        restaurants = [dict(zip(column_names, row)) for row in rows]
+        return jsonify({'restaurants': restaurants}), 200
+
+    # GETメソッドの処理
+    try:
+        c.execute('SELECT * FROM restaurants')
+        rows = c.fetchall()
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        conn.close()
+
+    if not rows:
+        return jsonify({'restaurants': []}), 200
+
+    column_names = [desc[0] for desc in c.description]
+    restaurants = [dict(zip(column_names, row)) for row in rows]
+    return jsonify({'restaurants': restaurants}), 200
+
 @app.route('/restaurant/<int:id>', methods=['GET'])
 def get_restaurant_by_id(id):
     conn = sqlite3.connect('example.db')
