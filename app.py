@@ -13,16 +13,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # CORS設定を更新
 
-# Google Sheets API 認証情報
+# ログ設定
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# Google Sheets API設定
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
-
-# スプレッドシートの設定
 SHEET_ID = '13W3SPt7KrGnYCLzC8DQ0QyoNhFFs8CEd4faHBhUSDww'
 SHEET_RANGE = 'DB!A:AC'
 
+# Google Sheets API認証
 def authenticate_google_services():
-    """Google Sheets APIを認証"""
     try:
         credentials = service_account.Credentials.from_service_account_file(
             SERVICE_ACCOUNT_FILE, scopes=SCOPES
@@ -33,15 +37,14 @@ def authenticate_google_services():
         logging.error(f"Google Sheets API認証に失敗しました: {e}")
         raise
 
+# Google Sheetsからデータを取得
 def get_spreadsheet_data():
-    """スプレッドシートからデータを取得"""
     try:
         credentials = authenticate_google_services()
         service = build('sheets', 'v4', credentials=credentials)
         sheet = service.spreadsheets()
         result = sheet.values().get(spreadsheetId=SHEET_ID, range=SHEET_RANGE).execute()
         rows = result.get('values', [])
-
         if rows:
             headers = rows[0]
             data = rows[1:]
@@ -53,17 +56,14 @@ def get_spreadsheet_data():
         logging.error(f"スプレッドシートデータの取得に失敗しました: {e}")
         return [], []
 
+# SQLite3データベースを初期化
 def init_db(recreate=False):
-    """SQLite3データベースを初期化"""
     try:
         conn = sqlite3.connect('example.db')
         c = conn.cursor()
-
         if recreate:
             c.execute('DROP TABLE IF EXISTS restaurants')
             logging.info("既存のテーブルを削除しました。")
-
-        # テーブルの作成
         c.execute('''
             CREATE TABLE IF NOT EXISTS restaurants (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,15 +105,14 @@ def init_db(recreate=False):
     finally:
         conn.close()
 
+# SQLite3にデータを挿入
 def insert_data_to_db(data, headers):
-    """スプレッドシートのデータをSQLite3に挿入"""
     try:
         conn = sqlite3.connect('example.db')
         c = conn.cursor()
-
         for row in data:
             if len(row) < 29:
-                row += [''] * (29 - len(row))  # 不足分を補完
+                row += [''] * (29 - len(row))
             c.execute('''
                 INSERT INTO restaurants (
                     name, address, phone_number, tabelog_rating, tabelog_review_count, tabelog_link, google_rating,
@@ -123,7 +122,6 @@ def insert_data_to_db(data, headers):
                     detail_image3
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', tuple(row))
-        
         conn.commit()
         logging.info(f"データベースに{len(data)}行のデータを挿入しました。")
     except sqlite3.Error as e:
@@ -131,9 +129,10 @@ def insert_data_to_db(data, headers):
     finally:
         conn.close()
 
+# エンドポイント
 @app.route('/', methods=['GET'])
-def hello():
-    return jsonify({'message': 'Flask start!'})
+def home():
+    return jsonify({"message": "データがデータベースに保存されました。"})
 
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
@@ -174,20 +173,15 @@ def get_genres():
 
 @app.route('/results', methods=['GET'])
 def results_restaurants():
-    """
-    クエリパラメータに基づいて SQLite3 データベースからレストラン情報を取得。
-    """
     try:
-        # クエリパラメータの取得
-        area = request.args.get('area', '')  # エリア
-        guests = request.args.get('guests', None, type=int)  # 人数
-        genre = request.args.get('genre', '')  # ジャンル
-        budget_min = request.args.get('budgetMin', None, type=int)  # 予算下限
-        budget_max = request.args.get('budgetMax', None, type=int)  # 予算上限
-        private_room = request.args.get('privateRoom', '').lower()  # 個室希望
-        drink_included = request.args.get('drinkIncluded', '').lower()  # 飲み放題希望
+        area = request.args.get('area', '')
+        guests = request.args.get('guests', None, type=int)
+        genre = request.args.get('genre', '')
+        budget_min = request.args.get('budgetMin', None, type=int)
+        budget_max = request.args.get('budgetMax', None, type=int)
+        private_room = request.args.get('privateRoom', '').lower()
+        drink_included = request.args.get('drinkIncluded', '').lower()
 
-        # SQLクエリの構築
         query = "SELECT * FROM restaurants WHERE 1=1"
         params = []
 
@@ -213,20 +207,15 @@ def results_restaurants():
             query += " AND has_drink_all_included = ?"
             params.append(drink_included)
 
-        # データベース接続とクエリの実行
         conn = sqlite3.connect('example.db')
         cursor = conn.cursor()
-        logging.info(f"Executing SQL: {query} with params {params}")
         cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
 
-        # 結果が空の場合の処理
         if not rows:
-            logging.info("No matching restaurants found.")
             return jsonify({"message": "条件に一致するレストランが見つかりませんでした。", "results": []}), 200
 
-        # データの整形
         result = [
             {
                 "id": row[0],
@@ -262,18 +251,12 @@ def results_restaurants():
             }
             for row in rows
         ]
-
-        # JSONレスポンスを返却
-        logging.info(f"Found {len(result)} matching restaurants.")
         return jsonify({"results": result}), 200
 
     except sqlite3.Error as e:
         logging.error(f"Database error: {e}")
         return jsonify({"error": "データベースエラーが発生しました。"}), 500
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        return jsonify({"error": "予期しないエラーが発生しました。"}), 500
-
+        
 @app.route('/restaurant/<int:id>', methods=['GET'])
 def get_restaurant_by_id(id):
     conn = sqlite3.connect('example.db')
