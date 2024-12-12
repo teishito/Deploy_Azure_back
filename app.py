@@ -135,8 +135,8 @@ def get_genres():
     genres = [row[0] for row in rows]
     return jsonify(genres)
 
-@app.route('/results', methods=['GET'])
-def results_restaurants():
+@app.route('/search', methods=['GET'])
+def search_restaurants():
     try:
         # クエリパラメータを取得
         area = request.args.get('area', '')  # エリア
