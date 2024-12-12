@@ -27,85 +27,99 @@ def authenticate_google_services():
     return credentials
 
 def get_spreadsheet_data():
-    credentials = authenticate_google_services()
-    service = build('sheets', 'v4', credentials=credentials)
-    sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=SHEET_ID, range=SHEET_RANGE).execute()
-    rows = result.get('values', [])
-    if rows:
-        headers = rows[0]
-        data = rows[1:]
-        return data, headers
-    return [], []
+    try:
+        credentials = authenticate_google_services()
+        service = build('sheets', 'v4', credentials=credentials)
+        sheet = service.spreadsheets()
+        result = sheet.values().get(spreadsheetId=SHEET_ID, range=SHEET_RANGE).execute()
+        rows = result.get('values', [])
+        if rows:
+            headers = rows[0]
+            data = rows[1:]
+            logging.info(f"Fetched {len(data)} rows from Google Sheets.")
+            return data, headers
+        logging.warning("No data found in the spreadsheet.")
+        return [], []
+    except Exception as e:
+        logging.error(f"Error fetching data from Google Sheets: {e}")
+        return [], []
 
 def init_db():
-    conn = sqlite3.connect('example.db')
-    c = conn.cursor()
+    try:
+        conn = sqlite3.connect('example.db')
+        c = conn.cursor()
 
-    # 既存のテーブルを削除
-    c.execute('DROP TABLE IF EXISTS restaurants')
+        # 既存のテーブルを削除
+        c.execute('DROP TABLE IF EXISTS restaurants')
 
-    # 新しいテーブルを作成
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS restaurants (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            address TEXT,
-            phone_number TEXT,
-            tabelog_rating REAL,
-            tabelog_review_count INTEGER,
-            tabelog_link TEXT,
-            google_rating REAL,
-            google_review_count INTEGER,
-            google_link TEXT,
-            opening_hours TEXT,
-            course TEXT,
-            menu TEXT,
-            drink_menu TEXT,
-            store_top_image TEXT,
-            description TEXT,
-            longitude REAL,
-            latitude REAL,
-            area TEXT,
-            nearest_station TEXT,
-            directions TEXT,
-            capacity INTEGER,
-            category TEXT,
-            budget_min INTEGER,
-            budget_max INTEGER,
-            has_private_room TEXT,
-            has_drink_all_included TEXT,
-            detail_image1 TEXT,
-            detail_image2 TEXT,
-            detail_image3 TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
+        # 新しいテーブルを作成
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS restaurants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                address TEXT,
+                phone_number TEXT,
+                tabelog_rating REAL,
+                tabelog_review_count INTEGER,
+                tabelog_link TEXT,
+                google_rating REAL,
+                google_review_count INTEGER,
+                google_link TEXT,
+                opening_hours TEXT,
+                course TEXT,
+                menu TEXT,
+                drink_menu TEXT,
+                store_top_image TEXT,
+                description TEXT,
+                longitude REAL,
+                latitude REAL,
+                area TEXT,
+                nearest_station TEXT,
+                directions TEXT,
+                capacity INTEGER,
+                category TEXT,
+                budget_min INTEGER,
+                budget_max INTEGER,
+                has_private_room TEXT,
+                has_drink_all_included TEXT,
+                detail_image1 TEXT,
+                detail_image2 TEXT,
+                detail_image3 TEXT
+            )
+        ''')
+        conn.commit()
+        logging.info("Database initialized successfully.")
+    except sqlite3.Error as e:
+        logging.error(f"Error initializing database: {e}")
+    finally:
+        conn.close()
 
 def insert_data_to_db(data, headers):
-    conn = sqlite3.connect('example.db')
-    c = conn.cursor()
+    try:
+        conn = sqlite3.connect('example.db')
+        c = conn.cursor()
 
-    # データを挿入
-    for row in data:
-        # 行の長さが29に満たない場合、足りない部分を空文字で補完
-        if len(row) < 29:
-            row += [''] * (29 - len(row))  # 足りない分を空文字で補完
+        # データを挿入
+        for row in data:
+            if len(row) < 29:
+                row += [''] * (29 - len(row))  # 足りない分を空文字で補完
 
-        c.execute('''
-            INSERT INTO restaurants (
-                name, address, phone_number, tabelog_rating, tabelog_review_count, tabelog_link, google_rating, 
-                google_review_count, google_link, opening_hours, course, menu, drink_menu, store_top_image, 
-                description, longitude, latitude, area, nearest_station, directions, capacity, category, 
-                budget_min, budget_max, has_private_room, has_drink_all_included, detail_image1, detail_image2, 
-                detail_image3
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', tuple(row))
+            c.execute('''
+                INSERT INTO restaurants (
+                    name, address, phone_number, tabelog_rating, tabelog_review_count, tabelog_link, google_rating, 
+                    google_review_count, google_link, opening_hours, course, menu, drink_menu, store_top_image, 
+                    description, longitude, latitude, area, nearest_station, directions, capacity, category, 
+                    budget_min, budget_max, has_private_room, has_drink_all_included, detail_image1, detail_image2, 
+                    detail_image3
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', tuple(row))
 
-    conn.commit()
-    conn.close()
-
+        conn.commit()
+        logging.info(f"{len(data)} rows inserted into the database successfully.")
+    except sqlite3.Error as e:
+        logging.error(f"Database insertion error: {e}")
+    finally:
+        conn.close()
 
 @app.route('/', methods=['GET'])
 def hello():
@@ -115,6 +129,19 @@ def hello():
 def hello_world():
     return jsonify(message='Hello World by Flask')
 
+@app.route('/api/check-db', methods=['GET'])
+def check_db():
+    try:
+        conn = sqlite3.connect('example.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM restaurants LIMIT 5")
+        rows = cursor.fetchall()
+        conn.close()
+        return jsonify(rows)
+    except sqlite3.Error as e:
+        logging.error(f"Error reading database: {e}")
+        return jsonify({"error": "データベースエラーが発生しました。"}), 500
+        
 @app.route('/api/areas', methods=['GET'])
 def get_areas():
     conn = sqlite3.connect('example.db')
@@ -282,5 +309,8 @@ def list_endpoints():
 
 if __name__ == '__main__':
     init_db()  # アプリ起動時にDBを初期化
+    data, headers = get_spreadsheet_data()
+    if data:
+        insert_data_to_db(data, headers)
     port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
     app.run(host='0.0.0.0', port=port)
