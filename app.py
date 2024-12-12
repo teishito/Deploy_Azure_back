@@ -135,7 +135,6 @@ def get_genres():
     genres = [row[0] for row in rows]
     return jsonify(genres)
 
-
 @app.route('/results', methods=['GET'])
 def results_restaurants():
     try:
@@ -183,7 +182,8 @@ def results_restaurants():
 
         # 結果が空の場合のハンドリング
         if not rows:
-            return jsonify({"message": "条件に一致するレストランが見つかりませんでした。"}), 404
+            logging.info("No results found for the given parameters.")
+            return jsonify({"message": "条件に一致するレストランが見つかりませんでした。", "results": []}), 404
 
         # データを整形して返却
         result = [
@@ -221,7 +221,7 @@ def results_restaurants():
             }
             for row in rows
         ]
-        return jsonify(result)
+        return jsonify({"results": result}), 200
 
     except sqlite3.Error as e:
         logging.error(f"Database error: {e}")
