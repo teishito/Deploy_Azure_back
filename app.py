@@ -89,26 +89,22 @@ def insert_data_to_db(data, headers):
 
     # データを挿入
     for row in data:
-        try:
-            if len(row) < 29:  # 行の長さが足りない場合、空文字で補完
-                row += [''] * (29 - len(row))
+        # 行の長さが29に満たない場合、足りない部分を空文字で補完
+        if len(row) < 29:
+            row += [''] * (29 - len(row))  # 足りない分を空文字で補完
 
-            c.execute('''
-                INSERT INTO restaurants (
-                    name, address, phone_number, tabelog_rating, tabelog_review_count, tabelog_link, 
-                    google_rating, google_review_count, google_link, opening_hours, course, menu, 
-                    drink_menu, store_top_image, description, longitude, latitude, area, nearest_station, 
-                    directions, capacity, category, budget_min, budget_max, has_private_room, 
-                    has_drink_all_included, detail_image1, detail_image2, detail_image3
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', tuple(row))
-        except sqlite3.Error as e:
-            logging.error(f"データ挿入エラー: {e}")
-            logging.error(f"挿入しようとしたデータ: {row}")
-    
+        c.execute('''
+            INSERT INTO restaurants (
+                name, address, phone_number, tabelog_rating, tabelog_review_count, tabelog_link, google_rating, 
+                google_review_count, google_link, opening_hours, course, menu, drink_menu, store_top_image, 
+                description, longitude, latitude, area, nearest_station, directions, capacity, category, 
+                budget_min, budget_max, has_private_room, has_drink_all_included, detail_image1, detail_image2, 
+                detail_image3
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', tuple(row))
+
     conn.commit()
     conn.close()
-    logging.info("データベースにデータが挿入されました。")
 
 @app.route('/')
 def index():
@@ -138,9 +134,9 @@ def check_db():
         conn.close()
         return jsonify(rows)
     except sqlite3.Error as e:
-        logging.error(f"データベース読み取りエラー: {e}")
+        logging.error(f"Error reading database: {e}")
         return jsonify({"error": "データベースエラーが発生しました。"}), 500
-
+        
 @app.route('/api/areas', methods=['GET'])
 def get_areas():
     conn = sqlite3.connect('example.db')
@@ -291,71 +287,6 @@ def get_restaurants():
     restaurants = [dict(zip(column_names, row)) for row in rows]
     return jsonify({'restaurants': restaurants})
 
-@app.route('/api/detailrestaurants', methods=['GET', 'POST'])
-def get_detailed_restaurants():
-    if request.method == 'POST':
-        filters = request.json  # POSTリクエストのボディを取得
-        area = filters.get('area', '')
-        genre = filters.get('genre', '')
-        people = filters.get('people', 0)
-        private_room = filters.get('privateRoom', '')  # 個室フィルター
-        drink_included = filters.get('drinkIncluded', '')  # 飲み放題フィルター
-        budget_min = filters.get('budgetMin', None)
-        budget_max = filters.get('budgetMax', None)
-
-        # データベースクエリに基づいてフィルタリング
-        query = 'SELECT * FROM restaurants WHERE 1=1'
-        params = []
-
-        # フィルタ条件の構築
-        if area:
-            query += ' AND area = ?'
-            params.append(area)
-        if genre:
-            query += ' AND category LIKE ?'
-            params.append(f'%{genre}%')
-        if people:
-            query += ' AND capacity >= ?'
-            params.append(people)
-        if private_room in ['有', '無']:
-            query += ' AND has_private_room = ?'
-            params.append(private_room)
-        if drink_included in ['有', '無']:
-            query += ' AND has_drink_all_included = ?'
-            params.append(drink_included)
-        if budget_min is not None:
-            query += ' AND budget_min >= ?'
-            params.append(budget_min)
-        if budget_max is not None:
-            query += ' AND budget_max <= ?'
-            params.append(budget_max)
-
-        # データベース接続
-        conn = sqlite3.connect('example.db')
-        c = conn.cursor()
-        c.execute(query, params)
-        rows = c.fetchall()
-        conn.close()
-
-        # レスポンス用にデータを整形
-        if rows:
-            column_names = [desc[0] for desc in c.description]
-            restaurants = [dict(zip(column_names, row)) for row in rows]
-            return jsonify({'restaurants': restaurants}), 200
-        else:
-            return jsonify({'message': '条件に一致するレストランが見つかりませんでした。', 'restaurants': []}), 200
-
-    # GETメソッド用の処理（全データ取得）
-    conn = sqlite3.connect('example.db')
-    c = conn.cursor()
-    c.execute('SELECT * FROM restaurants')
-    rows = c.fetchall()
-    conn.close()
-
-    column_names = [desc[0] for desc in c.description]
-    restaurants = [dict(zip(column_names, row)) for row in rows]
-    return jsonify({'restaurants': restaurants}), 200
-
 @app.route('/restaurant/<int:id>', methods=['GET'])
 def get_restaurant_by_id(id):
     conn = sqlite3.connect('example.db')
@@ -407,12 +338,15 @@ def list_endpoints():
     return jsonify([str(rule) for rule in app.url_map.iter_rules()])
 
 if __name__ == '__main__':
-    init_db()  # データベースの初期化
-    # 必要ならGoogle Sheetsからデータを取得して挿入
+    # DBの初期化（再作成オプションを指定）
+    init_db(recreate=True)
+
+    # Google Sheetsからデータを取得してDBに保存
     data, headers = get_spreadsheet_data()
     if data:
         insert_data_to_db(data, headers)
     else:
-        logging.warning("挿入可能なデータがありませんでした。")        
+        logging.warning("挿入可能なデータがありませんでした。")
+        
     port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
     app.run(host='0.0.0.0', port=port)
