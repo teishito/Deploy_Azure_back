@@ -89,22 +89,26 @@ def insert_data_to_db(data, headers):
 
     # データを挿入
     for row in data:
-        # 行の長さが29に満たない場合、足りない部分を空文字で補完
-        if len(row) < 29:
-            row += [''] * (29 - len(row))  # 足りない分を空文字で補完
+        try:
+            if len(row) < 29:  # 行の長さが足りない場合、空文字で補完
+                row += [''] * (29 - len(row))
 
-        c.execute('''
-            INSERT INTO restaurants (
-                name, address, phone_number, tabelog_rating, tabelog_review_count, tabelog_link, google_rating, 
-                google_review_count, google_link, opening_hours, course, menu, drink_menu, store_top_image, 
-                description, longitude, latitude, area, nearest_station, directions, capacity, category, 
-                budget_min, budget_max, has_private_room, has_drink_all_included, detail_image1, detail_image2, 
-                detail_image3
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', tuple(row))
-
+            c.execute('''
+                INSERT INTO restaurants (
+                    name, address, phone_number, tabelog_rating, tabelog_review_count, tabelog_link, 
+                    google_rating, google_review_count, google_link, opening_hours, course, menu, 
+                    drink_menu, store_top_image, description, longitude, latitude, area, nearest_station, 
+                    directions, capacity, category, budget_min, budget_max, has_private_room, 
+                    has_drink_all_included, detail_image1, detail_image2, detail_image3
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', tuple(row))
+        except sqlite3.Error as e:
+            logging.error(f"データ挿入エラー: {e}")
+            logging.error(f"挿入しようとしたデータ: {row}")
+    
     conn.commit()
     conn.close()
+    logging.info("データベースにデータが挿入されました。")
 
 @app.route('/')
 def index():
@@ -134,9 +138,9 @@ def check_db():
         conn.close()
         return jsonify(rows)
     except sqlite3.Error as e:
-        logging.error(f"Error reading database: {e}")
+        logging.error(f"データベース読み取りエラー: {e}")
         return jsonify({"error": "データベースエラーが発生しました。"}), 500
-        
+
 @app.route('/api/areas', methods=['GET'])
 def get_areas():
     conn = sqlite3.connect('example.db')
