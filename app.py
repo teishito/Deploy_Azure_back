@@ -403,15 +403,12 @@ def list_endpoints():
     return jsonify([str(rule) for rule in app.url_map.iter_rules()])
 
 if __name__ == '__main__':
-    # DBの初期化（再作成オプションを指定）
-    init_db(recreate=True)
-
-    # Google Sheetsからデータを取得してDBに保存
+    init_db()  # データベースの初期化
+    # 必要ならGoogle Sheetsからデータを取得して挿入
     data, headers = get_spreadsheet_data()
     if data:
         insert_data_to_db(data, headers)
     else:
-        logging.warning("挿入可能なデータがありませんでした。")
-        
+        logging.warning("挿入可能なデータがありませんでした。")        
     port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
     app.run(host='0.0.0.0', port=port)
