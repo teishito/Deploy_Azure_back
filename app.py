@@ -280,61 +280,52 @@ def get_detailed_restaurants():
     return jsonify({'restaurants': restaurants}), 200
 
 @app.route('/results', methods=['GET', 'POST'])
-def results_restaurants():
-    try:
-        # GETメソッド: クエリパラメータを取得
-        if request.method == 'GET':
-            area = request.args.get('area', '')
-            genre = request.args.get('genre', '')
-            guests = request.args.get('guests', 0, type=int)
-            budget_min = request.args.get('budgetMin', None, type=int)
-            budget_max = request.args.get('budgetMax', None, type=int)
-            private_room = request.args.get('privateRoom', '').lower()
-            drink_included = request.args.get('drinkIncluded', '').lower()
-        else:  # POSTメソッド: JSONボディを取得
-            filters = request.json
-            area = filters.get('area', '')
-            genre = filters.get('genre', '')
-            guests = filters.get('guests', 0)
-            budget_min = filters.get('budgetMin', None)
-            budget_max = filters.get('budgetMax', None)
-            private_room = filters.get('privateRoom', '').lower()
-            drink_included = filters.get('drinkIncluded', '').lower()
+def get_detailed_restaurants():
+    if request.method == 'POST':
+        filters = request.json  # POSTリクエストのボディを取得
+        area = filters.get('area', '')
+        genre = filters.get('genre', '')
+        people = filters.get('people', 0)
+        private_room = filters.get('privateRoom', '')  # 個室フィルター
+        drink_included = filters.get('drinkIncluded', '')  # 飲み放題フィルター
+        budget_min = filters.get('budgetMin', None)
+        budget_max = filters.get('budgetMax', None)
 
-        # クエリを構築
+        # データベースクエリに基づいてフィルタリング
         query = 'SELECT * FROM restaurants WHERE 1=1'
         params = []
 
+        # フィルタ条件の構築
         if area:
             query += ' AND area = ?'
             params.append(area)
         if genre:
             query += ' AND category LIKE ?'
             params.append(f'%{genre}%')
-        if guests:
+        if people:
             query += ' AND capacity >= ?'
-            params.append(guests)
+            params.append(people)
+        if private_room in ['有', '無']:
+            query += ' AND has_private_room = ?'
+            params.append(private_room)
+        if drink_included in ['有', '無']:
+            query += ' AND has_drink_all_included = ?'
+            params.append(drink_included)
         if budget_min is not None:
             query += ' AND budget_min >= ?'
             params.append(budget_min)
         if budget_max is not None:
             query += ' AND budget_max <= ?'
             params.append(budget_max)
-        if private_room in ['yes', 'no']:
-            query += ' AND has_private_room = ?'
-            params.append(private_room)
-        if drink_included in ['yes', 'no']:
-            query += ' AND has_drink_all_included = ?'
-            params.append(drink_included)
 
-        # データベース接続とクエリ実行
+        # データベース接続
         conn = sqlite3.connect('example.db')
         c = conn.cursor()
         c.execute(query, params)
         rows = c.fetchall()
         conn.close()
 
-        # データの整形
+        # レスポンス用にデータを整形
         if rows:
             column_names = [desc[0] for desc in c.description]
             restaurants = [dict(zip(column_names, row)) for row in rows]
@@ -342,12 +333,17 @@ def results_restaurants():
         else:
             return jsonify({'message': '条件に一致するレストランが見つかりませんでした。', 'restaurants': []}), 200
 
-    except sqlite3.Error as e:
-        logging.error(f"Database error: {e}")
-        return jsonify({'error': 'データベースエラーが発生しました。'}), 500
-    except Exception as ex:
-        logging.error(f"Unexpected error: {ex}")
-        return jsonify({'error': '予期しないエラーが発生しました。'}), 500
+    # GETメソッド用の処理（全データ取得）
+    conn = sqlite3.connect('example.db')
+    c = conn.cursor()
+    c.execute('SELECT * FROM restaurants')
+    rows = c.fetchall()
+    conn.close()
+
+    column_names = [desc[0] for desc in c.description]
+    restaurants = [dict(zip(column_names, row)) for row in rows]
+    return jsonify({'restaurants': restaurants}), 200
+
 
 @app.route('/list-endpoints', methods=['GET'])
 def list_endpoints():
