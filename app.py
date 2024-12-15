@@ -124,7 +124,7 @@ def get_genres():
     genres = [row[0] for row in rows]
     return jsonify(genres)
 
-@app.route('/results', methods=['GET'])
+@app.route('/results', methods=['POST'])
 def results_restaurants():
     try:
         area = request.args.get('area', '')
