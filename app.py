@@ -281,34 +281,43 @@ def get_detailed_restaurants():
 
 @app.route('/results', methods=['GET', 'POST'])
 def get_detailed_restaurants():
-    if request.method == 'POST':
-        filters = request.json  # POSTリクエストのボディを取得
-        area = filters.get('area', '')
-        genre = filters.get('genre', '')
-        people = filters.get('people', 0)
-        private_room = filters.get('privateRoom', '')  # 個室フィルター
-        drink_included = filters.get('drinkIncluded', '')  # 飲み放題フィルター
-        budget_min = filters.get('budgetMin', None)
-        budget_max = filters.get('budgetMax', None)
+    try:
+        # GETリクエストの場合
+        if request.method == 'GET':
+            area = request.args.get('area', '')
+            genre = request.args.get('genre', '')
+            guests = request.args.get('guests', 0, type=int)
+            private_room = request.args.get('privateRoom', '').lower()
+            drink_included = request.args.get('drinkIncluded', '').lower()
+            budget_min = request.args.get('budgetMin', None, type=int)
+            budget_max = request.args.get('budgetMax', None, type=int)
+        else:  # POSTリクエストの場合
+            filters = request.json
+            area = filters.get('area', '')
+            genre = filters.get('genre', '')
+            guests = filters.get('guests', 0)
+            private_room = filters.get('privateRoom', '').lower()
+            drink_included = filters.get('drinkIncluded', '').lower()
+            budget_min = filters.get('budgetMin', None)
+            budget_max = filters.get('budgetMax', None)
 
-        # データベースクエリに基づいてフィルタリング
+        # データベースクエリ構築
         query = 'SELECT * FROM restaurants WHERE 1=1'
         params = []
 
-        # フィルタ条件の構築
         if area:
             query += ' AND area = ?'
             params.append(area)
         if genre:
             query += ' AND category LIKE ?'
             params.append(f'%{genre}%')
-        if people:
+        if guests:
             query += ' AND capacity >= ?'
-            params.append(people)
-        if private_room in ['有', '無']:
+            params.append(guests)
+        if private_room in ['yes', 'no']:
             query += ' AND has_private_room = ?'
             params.append(private_room)
-        if drink_included in ['有', '無']:
+        if drink_included in ['yes', 'no']:
             query += ' AND has_drink_all_included = ?'
             params.append(drink_included)
         if budget_min is not None:
@@ -318,32 +327,22 @@ def get_detailed_restaurants():
             query += ' AND budget_max <= ?'
             params.append(budget_max)
 
-        # データベース接続
+        # データベース接続とクエリ実行
         conn = sqlite3.connect('example.db')
-        c = conn.cursor()
-        c.execute(query, params)
-        rows = c.fetchall()
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
         conn.close()
 
-        # レスポンス用にデータを整形
+        # レスポンス整形
         if rows:
-            column_names = [desc[0] for desc in c.description]
+            column_names = [desc[0] for desc in cursor.description]
             restaurants = [dict(zip(column_names, row)) for row in rows]
             return jsonify({'restaurants': restaurants}), 200
         else:
             return jsonify({'message': '条件に一致するレストランが見つかりませんでした。', 'restaurants': []}), 200
-
-    # GETメソッド用の処理（全データ取得）
-    conn = sqlite3.connect('example.db')
-    c = conn.cursor()
-    c.execute('SELECT * FROM restaurants')
-    rows = c.fetchall()
-    conn.close()
-
-    column_names = [desc[0] for desc in c.description]
-    restaurants = [dict(zip(column_names, row)) for row in rows]
-    return jsonify({'restaurants': restaurants}), 200
-
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/list-endpoints', methods=['GET'])
 def list_endpoints():
