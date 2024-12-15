@@ -333,6 +333,21 @@ def process_query():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/restaurant/<int:id>/menu', methods=['GET'])
+def get_menu_details(id):
+    conn = sqlite3.connect('example.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT menu, drink_menu FROM restaurants WHERE id = ?", (id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return jsonify({
+            "foodMenu": row[0],
+            "drinkMenu": row[1],
+        })
+    return jsonify({"error": "Menu not found"}), 404
+
 # レストランデータを辞書形式に変換する関数
 def format_restaurant(row):
     return {
