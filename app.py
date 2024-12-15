@@ -124,9 +124,17 @@ def get_genres():
     genres = [row[0] for row in rows]
     return jsonify(genres)
 
+import json
+import logging
+import sqlite3
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
 @app.route('/results', methods=['POST'])
 def results_restaurants():
     try:
+        # クエリパラメータの取得
         area = request.args.get('area', '')
         guests = request.args.get('guests', None, type=int)
         genre = request.args.get('genre', '')
@@ -135,6 +143,7 @@ def results_restaurants():
         private_room = request.args.get('privateRoom', '').lower()
         drink_included = request.args.get('drinkIncluded', '').lower()
 
+        # クエリ構築
         query = "SELECT * FROM restaurants WHERE 1=1"
         params = []
 
@@ -160,6 +169,7 @@ def results_restaurants():
             query += " AND has_drink_all_included = ?"
             params.append(drink_included)
 
+        # データベース接続とクエリ実行
         conn = sqlite3.connect('example.db')
         cursor = conn.cursor()
         cursor.execute(query, params)
@@ -167,10 +177,12 @@ def results_restaurants():
         conn.close()
 
         if not rows:
-            return jsonify({"message": "条件に一致するレストランが見つかりませんでした。", "results": []}), 200
+            return json.dumps({"message": "条件に一致するレストランが見つかりませんでした。", "results": []}, ensure_ascii=False), 200
 
-        result = [
-            {
+        # データの整形
+        results = []
+        for row in rows:
+            shop_info = {
                 "id": row[0],
                 "name": row[1],
                 "address": row[2],
@@ -202,13 +214,15 @@ def results_restaurants():
                 "detail_image2": row[28],
                 "detail_image3": row[29],
             }
-            for row in rows
-        ]
-        return jsonify({"results": result}), 200
+            results.append(shop_info)
+
+        # JSON形式で返却
+        result_json = json.dumps({"results": results}, ensure_ascii=False)
+        return result_json, 200
 
     except sqlite3.Error as e:
         logging.error(f"Database error: {e}")
-        return jsonify({"error": "データベースエラーが発生しました。"}), 500
+        return json.dumps({"error": "データベースエラーが発生しました。"}, ensure_ascii=False), 500
 
 @app.route('/api/restaurants', methods=['GET', 'POST'])
 def get_restaurants():
