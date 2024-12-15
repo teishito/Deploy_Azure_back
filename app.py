@@ -279,109 +279,68 @@ def get_detailed_restaurants():
     restaurants = [dict(zip(column_names, row)) for row in rows]
     return jsonify({'restaurants': restaurants}), 200
 
-@app.route('/results', methods=['POST'])
+@app.route('/results', methods=['GET', 'POST'])
 def results_restaurants():
-    try:
-        # POSTリクエストからJSONデータを取得
-        data = request.get_json()
-        if not data:
-            return json.dumps({"error": "リクエストボディが空です。"}, ensure_ascii=False), 400
+    if request.method == 'POST':
+        filters = request.json  # POSTリクエストのボディを取得
+        area = filters.get('area', '')
+        genre = filters.get('genre', '')
+        guests = filters.get('guests', 0)
+        budget_min = filters.get('budgetMin', None)
+        budget_max = filters.get('budgetMax', None)
+        private_room = filters.get('privateRoom', '').lower()
+        drink_included = filters.get('drinkIncluded', '').lower()
 
-        # クエリパラメータの取得
-        area = data.get('area', '').strip()
-        guests = data.get('guests', None)
-        genre = data.get('genre', '').strip()
-        budget_min = data.get('budgetMin', None)
-        budget_max = data.get('budgetMax', None)
-        private_room = data.get('privateRoom', '').lower()
-        drink_included = data.get('drinkIncluded', '').lower()
-
-        # クエリ構築
-        query = "SELECT * FROM restaurants WHERE 1=1"
+        # データベースクエリに基づいてフィルタリング
+        query = 'SELECT * FROM restaurants WHERE 1=1'
         params = []
 
         if area:
-            query += " AND area = ?"
+            query += ' AND area = ?'
             params.append(area)
-        if guests is not None:
-            query += " AND capacity >= ?"
-            params.append(int(guests))  # 数値型に変換
         if genre:
-            query += " AND category LIKE ?"
-            params.append(f"%{genre}%")
+            query += ' AND category LIKE ?'
+            params.append(f'%{genre}%')
+        if guests:
+            query += ' AND capacity >= ?'
+            params.append(guests)
         if budget_min is not None:
-            query += " AND budget_min >= ?"
-            params.append(int(budget_min))
+            query += ' AND budget_min >= ?'
+            params.append(budget_min)
         if budget_max is not None:
-            query += " AND budget_max <= ?"
-            params.append(int(budget_max))
+            query += ' AND budget_max <= ?'
+            params.append(budget_max)
         if private_room in ['yes', 'no']:
-            query += " AND has_private_room = ?"
+            query += ' AND has_private_room = ?'
             params.append(private_room)
         if drink_included in ['yes', 'no']:
-            query += " AND has_drink_all_included = ?"
+            query += ' AND has_drink_all_included = ?'
             params.append(drink_included)
 
-        # データベース接続とクエリ実行
         conn = sqlite3.connect('example.db')
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
+        c = conn.cursor()
+        c.execute(query, params)
+        rows = c.fetchall()
         conn.close()
 
-        if not rows:
-            return json.dumps({"message": "条件に一致するレストランが見つかりませんでした。", "results": []}, ensure_ascii=False), 200
+        # レスポンス用にデータを整形
+        if rows:
+            column_names = [desc[0] for desc in c.description]
+            restaurants = [dict(zip(column_names, row)) for row in rows]
+            return jsonify({'restaurants': restaurants}), 200
+        else:
+            return jsonify({'message': '条件に一致するレストランが見つかりませんでした。', 'restaurants': []}), 200
 
-        # データの整形
-        results = []
-        for row in rows:
-            shop_info = {
-                "id": row[0],
-                "name": row[1],
-                "address": row[2],
-                "phone_number": row[3],
-                "tabelog_rating": row[4],
-                "tabelog_review_count": row[5],
-                "tabelog_link": row[6],
-                "google_rating": row[7],
-                "google_review_count": row[8],
-                "google_link": row[9],
-                "opening_hours": row[10],
-                "course": row[11],
-                "menu": row[12],
-                "drink_menu": row[13],
-                "store_top_image": row[14],
-                "description": row[15],
-                "longitude": row[16],
-                "latitude": row[17],
-                "area": row[18],
-                "nearest_station": row[19],
-                "directions": row[20],
-                "capacity": row[21],
-                "category": row[22],
-                "budget_min": row[23],
-                "budget_max": row[24],
-                "has_private_room": row[25],
-                "has_drink_all_included": row[26],
-                "detail_image1": row[27],
-                "detail_image2": row[28],
-                "detail_image3": row[29],
-            }
-            results.append(shop_info)
+    # GETメソッド用の処理（全データ取得）
+    conn = sqlite3.connect('example.db')
+    c = conn.cursor()
+    c.execute('SELECT * FROM restaurants')
+    rows = c.fetchall()
+    conn.close()
 
-        # JSON形式で返却
-        result_json = json.dumps({"results": results}, ensure_ascii=False)
-        return result_json, 200
-
-    except sqlite3.Error as e:
-        logging.error(f"Database error: {e}")
-        return json.dumps({"error": "データベースエラーが発生しました。"}, ensure_ascii=False), 500
-    except ValueError as ve:
-        logging.error(f"Value error: {ve}")
-        return json.dumps({"error": "入力データが不正です。"}, ensure_ascii=False), 400
-    except Exception as ex:
-        logging.error(f"Unexpected error: {ex}")
-        return json.dumps({"error": "予期しないエラーが発生しました。"}, ensure_ascii=False), 500
+    column_names = [desc[0] for desc in c.description]
+    restaurants = [dict(zip(column_names, row)) for row in rows]
+    return jsonify({'restaurants': restaurants}), 200
 
 @app.route('/list-endpoints', methods=['GET'])
 def list_endpoints():
