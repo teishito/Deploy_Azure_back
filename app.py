@@ -44,51 +44,6 @@ def get_spreadsheet_data():
         logging.error(f"Google Sheets APIエラー: {e}")
         raise
 
-def init_db():
-    conn = sqlite3.connect('example.db')
-    c = conn.cursor()
-
-    # 既存のテーブルを削除
-    c.execute('DROP TABLE IF EXISTS restaurants')
-
-    # 新しいテーブルを作成
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS restaurants (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            address TEXT,
-            phone_number TEXT,
-            tabelog_rating REAL,
-            tabelog_review_count INTEGER,
-            tabelog_link TEXT,
-            google_rating REAL,
-            google_review_count INTEGER,
-            google_link TEXT,
-            opening_hours TEXT,
-            course TEXT,
-            menu TEXT,
-            drink_menu TEXT,
-            store_top_image TEXT,
-            description TEXT,
-            longitude REAL,
-            latitude REAL,
-            area TEXT,
-            nearest_station TEXT,
-            directions TEXT,
-            capacity INTEGER,
-            category TEXT,
-            budget_min INTEGER,
-            budget_max INTEGER,
-            has_private_room TEXT,
-            has_drink_all_included TEXT,
-            detail_image1 TEXT,
-            detail_image2 TEXT,
-            detail_image3 TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
 def insert_data_to_db(data, headers):
     conn = sqlite3.connect('example.db')
     c = conn.cursor()
@@ -416,21 +371,6 @@ def list_endpoints():
     return jsonify([str(rule) for rule in app.url_map.iter_rules()])
 
 if __name__ == '__main__':
-    try:
-        # データベースの初期化
-        logging.info("データベースを初期化中...")
-        init_db()
-
-        # Google Sheetsからデータ取得
-        logging.info("Google Sheetsからデータを取得中...")
-        data, headers = get_spreadsheet_data()
-        if data:
-            logging.info("データベースにデータを挿入中...")
-            insert_data_to_db(data, headers)
-        else:
-            logging.warning("Google Sheetsから挿入可能なデータが見つかりませんでした。")
-    except Exception as e:
-        logging.error(f"サーバー起動時にエラーが発生しました: {e}")
         
     port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
     app.run(host='0.0.0.0', port=port)
