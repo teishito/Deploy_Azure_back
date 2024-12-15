@@ -27,16 +27,22 @@ def authenticate_google_services():
     return credentials
 
 def get_spreadsheet_data():
-    credentials = authenticate_google_services()
-    service = build('sheets', 'v4', credentials=credentials)
-    sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=SHEET_ID, range=SHEET_RANGE).execute()
-    rows = result.get('values', [])
-    if rows:
-        headers = rows[0]
-        data = rows[1:]
-        return data, headers
-    return [], []
+    try:
+        credentials = authenticate_google_services()
+        service = build('sheets', 'v4', credentials=credentials)
+        sheet = service.spreadsheets()
+        result = sheet.values().get(spreadsheetId=SHEET_ID, range=SHEET_RANGE).execute()
+        rows = result.get('values', [])
+        if rows:
+            logging.info(f"Google Sheetsから{len(rows)}行のデータを取得しました。")
+            headers = rows[0]
+            data = rows[1:]
+            return data, headers
+        logging.warning("Google Sheetsにデータが存在しません。")
+        return [], []
+    except Exception as e:
+        logging.error(f"Google Sheets APIエラー: {e}")
+        raise
 
 def init_db():
     conn = sqlite3.connect('example.db')
@@ -108,17 +114,23 @@ def insert_data_to_db(data, headers):
 
 @app.route('/')
 def index():
-    data, headers = get_spreadsheet_data()
-
-    if not data:
-        return jsonify({'error': 'スプレッドシートのデータが見つかりません。'})
-
     try:
-        # データをSQLiteに保存
-        insert_data_to_db(data, headers)
-        return jsonify({'message': 'データがデータベースに保存されました。'})
+        data, headers = get_spreadsheet_data()
+        if not data:
+            logging.error("Google Sheetsからデータが取得できませんでした。")
+            return jsonify({'error': 'Google Sheetsからデータが取得できませんでした。'}), 500
+
+        # データベースへのデータ挿入を試行
+        try:
+            insert_data_to_db(data, headers)
+            logging.info("データがデータベースに正常に保存されました。")
+            return jsonify({'message': 'データがデータベースに保存されました。'})
+        except Exception as db_error:
+            logging.error(f"データベース挿入エラー: {db_error}")
+            return jsonify({'error': f'データベース保存エラー: {str(db_error)}'}), 500
     except Exception as e:
-        return jsonify({'error': f'データベース保存中にエラーが発生しました: {str(e)}'})
+        logging.error(f"データ処理中にエラーが発生しました: {e}")
+        return jsonify({'error': f'サーバー処理中にエラーが発生しました: {str(e)}'}), 500
 
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
@@ -404,15 +416,21 @@ def list_endpoints():
     return jsonify([str(rule) for rule in app.url_map.iter_rules()])
 
 if __name__ == '__main__':
-    # DBの初期化（再作成オプションを指定）
-    init_db(recreate=True)
+    try:
+        # データベースの初期化
+        logging.info("データベースを初期化中...")
+        init_db()
 
-    # Google Sheetsからデータを取得してDBに保存
-    data, headers = get_spreadsheet_data()
-    if data:
-        insert_data_to_db(data, headers)
-    else:
-        logging.warning("挿入可能なデータがありませんでした。")
+        # Google Sheetsからデータ取得
+        logging.info("Google Sheetsからデータを取得中...")
+        data, headers = get_spreadsheet_data()
+        if data:
+            logging.info("データベースにデータを挿入中...")
+            insert_data_to_db(data, headers)
+        else:
+            logging.warning("Google Sheetsから挿入可能なデータが見つかりませんでした。")
+    except Exception as e:
+        logging.error(f"サーバー起動時にエラーが発生しました: {e}")
         
     port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
     app.run(host='0.0.0.0', port=port)
