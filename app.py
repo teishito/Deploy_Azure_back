@@ -279,53 +279,59 @@ def get_detailed_restaurants():
     restaurants = [dict(zip(column_names, row)) for row in rows]
     return jsonify({'restaurants': restaurants}), 200
 
-@app.route('/results', methods=['GET'])
-def get_detailed_restaurants():
-    area = request.args.get('area', '').strip()
-    guests = request.args.get('guests', 0, type=int)
-    genre = request.args.get('genre', '').strip()
-    budget_min = request.args.get('budgetMin', None, type=int)
-    budget_max = request.args.get('budgetMax', None, type=int)
-    private_room = request.args.get('privateRoom', '').lower()
-    drink_included = request.args.get('drinkIncluded', '').lower()
+@app.route('/process_query', methods=['POST'])
+def process_query():
+    try:
+        # リクエストボディからパラメータを取得
+        params = request.json
+        area = params.get('area', '').strip()
+        guests = params.get('guests', 0)
+        genre = params.get('genre', '').strip()
+        budget_min = params.get('budgetMin', None)
+        budget_max = params.get('budgetMax', None)
+        private_room = params.get('privateRoom', '').lower()
+        drink_included = params.get('drinkIncluded', '').lower()
 
-    query = 'SELECT * FROM restaurants WHERE 1=1'
-    params = []
+        # SQLクエリの構築
+        query = 'SELECT * FROM restaurants WHERE 1=1'
+        sql_params = []
 
-    if area:
-        query += ' AND area = ?'
-        params.append(area)
-    if genre:
-        query += ' AND category LIKE ?'
-        params.append(f'%{genre}%')
-    if guests:
-        query += ' AND capacity >= ?'
-        params.append(guests)
-    if budget_min is not None:
-        query += ' AND budget_min >= ?'
-        params.append(budget_min)
-    if budget_max is not None:
-        query += ' AND budget_max <= ?'
-        params.append(budget_max)
-    if private_room in ['yes', 'no']:
-        query += ' AND has_private_room = ?'
-        params.append(private_room)
-    if drink_included in ['yes', 'no']:
-        query += ' AND has_drink_all_included = ?'
-        params.append(drink_included)
+        if area:
+            query += ' AND area = ?'
+            sql_params.append(area)
+        if genre:
+            query += ' AND category LIKE ?'
+            sql_params.append(f'%{genre}%')
+        if guests:
+            query += ' AND capacity >= ?'
+            sql_params.append(guests)
+        if budget_min is not None:
+            query += ' AND budget_min >= ?'
+            sql_params.append(budget_min)
+        if budget_max is not None:
+            query += ' AND budget_max <= ?'
+            sql_params.append(budget_max)
+        if private_room in ['yes', 'no']:
+            query += ' AND has_private_room = ?'
+            sql_params.append(private_room)
+        if drink_included in ['yes', 'no']:
+            query += ' AND has_drink_all_included = ?'
+            sql_params.append(drink_included)
 
-    conn = sqlite3.connect('example.db')
-    cursor = conn.cursor()
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    conn.close()
-
-    if rows:
+        # データベース接続とクエリの実行
+        conn = sqlite3.connect('example.db')
+        cursor = conn.cursor()
+        cursor.execute(query, sql_params)
+        rows = cursor.fetchall()
         column_names = [desc[0] for desc in cursor.description]
+        conn.close()
+
+        # 結果をJSON形式で返す
         restaurants = [dict(zip(column_names, row)) for row in rows]
         return jsonify({'restaurants': restaurants}), 200
-    else:
-        return jsonify({'message': '条件に一致するレストランが見つかりませんでした。', 'restaurants': []}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/list-endpoints', methods=['GET'])
 def list_endpoints():
