@@ -450,6 +450,60 @@ def result_restaurants():
         if conn:
             conn.close()  # 接続を確実に閉じる
 
+def fetch_from_db(query, params):
+    """データベースから指定クエリでデータを取得する関数"""
+    conn = sqlite3.connect('example.db')
+    cursor = conn.cursor()
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+@app.route('/results', methods=['GET'])
+def get_results():
+    try:
+        # クエリパラメータ取得
+        area = request.args.get('area', '').strip()
+        guests = request.args.get('guests', None, type=int)
+        genre = request.args.get('genre', '').strip()
+
+        # SQLクエリ作成
+        query = "SELECT * FROM restaurants WHERE 1=1"
+        params = []
+
+        if area:
+            query += " AND area = ?"
+            params.append(area)
+        if guests is not None:
+            query += " AND capacity >= ?"
+            params.append(guests)
+        if genre:
+            query += " AND category LIKE ?"
+            params.append(f"%{genre}%")
+
+        # データ取得
+        rows = fetch_from_db(query, params)
+
+        # 結果整形
+        results = [
+            {
+                "id": row[0],
+                "name": row[1],
+                "address": row[2],
+                "category": row[3],
+                "capacity": row[4],
+                "budget_min": row[5],
+                "budget_max": row[6],
+            }
+            for row in rows
+        ]
+
+        return jsonify(results), 200
+
+    except Exception as e:
+        # エラーハンドリング
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/list-endpoints', methods=['GET'])
 def list_endpoints():
     return jsonify([str(rule) for rule in app.url_map.iter_rules()])
