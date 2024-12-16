@@ -78,12 +78,17 @@ def get_restaurants():
 
 @app.route('/results', methods=['POST'])
 def get_results():
+    """
+    Results.jsからのPOSTリクエストを処理
+    """
     try:
-        logging.debug("POSTリクエスト受信")
+        if request.method != 'POST':
+            logging.warning("不正なリクエストメソッド: %s", request.method)
+            return jsonify({'error': '405 Method Not Allowed'}), 405
+
         filters = request.json
         logging.debug(f"受信したJSON: {json.dumps(filters, ensure_ascii=False)}")
 
-        # フィルタ条件の抽出
         area = filters.get('area', '').strip()
         genre = filters.get('genre', '').strip()
         guests = filters.get('people', 0)
@@ -128,15 +133,16 @@ def get_results():
         column_names = [desc[0] for desc in cursor.description]
         conn.close()
 
-        # 結果をJSONに変換
-        result = [dict(zip(column_names, row)) for row in rows]
-        logging.debug(f"クエリ結果: {result}")
+        # 結果の整形
+        restaurants = [dict(zip(column_names, row)) for row in rows]
+        logging.debug(f"クエリ結果: {restaurants}")
 
-        return jsonify({'restaurants': result}), 200
+        return jsonify({'restaurants': restaurants}), 200
 
     except Exception as e:
-        logging.error(f"エラーが発生しました: {str(e)}")
+        logging.error(f"エラー発生: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 
 if __name__ == '__main__':
