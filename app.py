@@ -31,26 +31,6 @@ def check_db():
     except sqlite3.Error as e:
         logging.error(f"Error reading database: {e}")
         return jsonify({"error": "データベースエラーが発生しました。"}), 500
-        
-@app.route('/api/areas', methods=['GET'])
-def get_areas():
-    conn = sqlite3.connect('example.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT area FROM restaurants")
-    rows = cursor.fetchall()
-    conn.close()
-    areas = [row[0] for row in rows]
-    return jsonify(areas)
-
-@app.route('/api/genres', methods=['GET'])
-def get_genres():
-    conn = sqlite3.connect('example.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT category FROM restaurants")
-    rows = cursor.fetchall()
-    conn.close()
-    genres = [row[0] for row in rows]
-    return jsonify(genres)
 
 @app.route('/api/restaurants', methods=['GET', 'POST'])
 def get_restaurants():
@@ -161,39 +141,26 @@ def get_detailed_restaurants():
     restaurants = [dict(zip(column_names, row)) for row in rows]
     return jsonify({'restaurants': restaurants}), 200
 
-def fetch_from_db(query, params):
-    """データベースから指定クエリでデータを取得する関数"""
-    conn = sqlite3.connect('example.db')
-    cursor = conn.cursor()
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
-
 @app.route('/results', methods=['GET', 'POST'])
 def get_results():
     """
-    検索条件に基づくレストラン情報を取得するエンドポイント
-    GET: 全レストランデータを取得
-    POST: 条件に基づいてフィルタリングされたデータを取得
+    GET: 全てのレストランデータを取得
+    POST: フィルタ条件に基づくデータを取得
     """
     try:
         if request.method == 'POST':
-            # POSTリクエストのボディからフィルタ条件を取得
-            filters = request.json
+            filters = request.json  # POSTボディからデータを取得
             area = filters.get('area', '').strip()
             genre = filters.get('genre', '').strip()
             guests = filters.get('people', 0)
-            private_room = filters.get('privateRoom', '')  # 個室フィルター
-            drink_included = filters.get('drinkIncluded', '')  # 飲み放題フィルター
             budget_min = filters.get('budgetMin', None)
             budget_max = filters.get('budgetMax', None)
+            private_room = filters.get('privateRoom', '').strip()
+            drink_included = filters.get('drinkIncluded', '').strip()
 
-            # SQLクエリの構築
             query = 'SELECT * FROM restaurants WHERE 1=1'
             params = []
 
-            # フィルタ条件の追加
             if area:
                 query += ' AND area = ?'
                 params.append(area)
@@ -203,20 +170,19 @@ def get_results():
             if guests:
                 query += ' AND capacity >= ?'
                 params.append(guests)
+            if budget_min:
+                query += ' AND budget_min >= ?'
+                params.append(budget_min)
+            if budget_max:
+                query += ' AND budget_max <= ?'
+                params.append(budget_max)
             if private_room in ['有', '無']:
                 query += ' AND has_private_room = ?'
                 params.append(private_room)
             if drink_included in ['有', '無']:
                 query += ' AND has_drink_all_included = ?'
                 params.append(drink_included)
-            if budget_min is not None:
-                query += ' AND budget_min >= ?'
-                params.append(budget_min)
-            if budget_max is not None:
-                query += ' AND budget_max <= ?'
-                params.append(budget_max)
 
-            # データベース接続とクエリ実行
             conn = sqlite3.connect('example.db')
             cursor = conn.cursor()
             cursor.execute(query, params)
@@ -224,29 +190,22 @@ def get_results():
             column_names = [desc[0] for desc in cursor.description]
             conn.close()
 
-            # データ整形とレスポンス
             restaurants = [dict(zip(column_names, row)) for row in rows]
             return jsonify({'restaurants': restaurants}), 200
 
-        # GETリクエストの場合（全データ取得）
-        conn = sqlite3.connect('example.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM restaurants')
-        rows = cursor.fetchall()
-        column_names = [desc[0] for desc in cursor.description]
-        conn.close()
+        elif request.method == 'GET':
+            conn = sqlite3.connect('example.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM restaurants')
+            rows = cursor.fetchall()
+            column_names = [desc[0] for desc in cursor.description]
+            conn.close()
 
-        # 全データを整形してレスポンス
-        restaurants = [dict(zip(column_names, row)) for row in rows]
-        return jsonify({'restaurants': restaurants}), 200
-
-    except sqlite3.Error as db_error:
-        # データベースエラー処理
-        return jsonify({'error': f'Database error: {db_error}'}), 500
+            restaurants = [dict(zip(column_names, row)) for row in rows]
+            return jsonify({'restaurants': restaurants}), 200
 
     except Exception as e:
-        # その他のエラー処理
-        return jsonify({'error': f'An error occurred: {e}'}), 500
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
         
