@@ -3,8 +3,6 @@ from flask_cors import CORS
 import os
 import sqlite3
 import json
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -16,80 +14,6 @@ def log_request_info():
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "https://tech0-gen-8-step3-app-py-10.azurewebsites.net"}})  # CORS設定を更新
-
-# Google Sheets API認証
-SERVICE_ACCOUNT_FILE = 'service_account.json'  # サービスアカウントのJSONファイルのパス
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
-
-# スプレッドシートの設定
-SHEET_ID = '13W3SPt7KrGnYCLzC8DQ0QyoNhFFs8CEd4faHBhUSDww'
-SHEET_RANGE = 'DB!A:AC'  # 取得する範囲
-
-def authenticate_google_services():
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    return credentials
-
-def get_spreadsheet_data():
-    try:
-        credentials = authenticate_google_services()
-        service = build('sheets', 'v4', credentials=credentials)
-        sheet = service.spreadsheets()
-        result = sheet.values().get(spreadsheetId=SHEET_ID, range=SHEET_RANGE).execute()
-        rows = result.get('values', [])
-        if rows:
-            logging.info(f"Google Sheetsから{len(rows)}行のデータを取得しました。")
-            headers = rows[0]
-            data = rows[1:]
-            return data, headers
-        logging.warning("Google Sheetsにデータが存在しません。")
-        return [], []
-    except Exception as e:
-        logging.error(f"Google Sheets APIエラー: {e}")
-        raise
-
-def insert_data_to_db(data, headers):
-    conn = sqlite3.connect('example.db')
-    c = conn.cursor()
-
-    # データを挿入
-    for row in data:
-        # 行の長さが29に満たない場合、足りない部分を空文字で補完
-        if len(row) < 29:
-            row += [''] * (29 - len(row))  # 足りない分を空文字で補完
-
-        c.execute('''
-            INSERT INTO restaurants (
-                name, address, phone_number, tabelog_rating, tabelog_review_count, tabelog_link, google_rating, 
-                google_review_count, google_link, opening_hours, course, menu, drink_menu, store_top_image, 
-                description, longitude, latitude, area, nearest_station, directions, capacity, category, 
-                budget_min, budget_max, has_private_room, has_drink_all_included, detail_image1, detail_image2, 
-                detail_image3
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', tuple(row))
-
-    conn.commit()
-    conn.close()
-
-@app.route('/')
-def index():
-    try:
-        data, headers = get_spreadsheet_data()
-        if not data:
-            logging.error("Google Sheetsからデータが取得できませんでした。")
-            return jsonify({'error': 'Google Sheetsからデータが取得できませんでした。'}), 500
-
-        # データベースへのデータ挿入を試行
-        try:
-            insert_data_to_db(data, headers)
-            logging.info("データがデータベースに正常に保存されました。")
-            return jsonify({'message': 'データがデータベースに保存されました。'})
-        except Exception as db_error:
-            logging.error(f"データベース挿入エラー: {db_error}")
-            return jsonify({'error': f'データベース保存エラー: {str(db_error)}'}), 500
-    except Exception as e:
-        logging.error(f"データ処理中にエラーが発生しました: {e}")
-        return jsonify({'error': f'サーバー処理中にエラーが発生しました: {str(e)}'}), 500
 
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
@@ -172,52 +96,6 @@ def get_restaurants():
     restaurants = [dict(zip(column_names, row)) for row in rows]
     return jsonify({'restaurants': restaurants})
 
-@app.route('/restaurant/<int:id>', methods=['GET'])
-def get_restaurant_by_id(id):
-    conn = sqlite3.connect('example.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM restaurants WHERE id = ?", (id,))
-    row = cursor.fetchone()
-    conn.close()
-
-    if row is None:
-        print("No data found for this ID")
-        return jsonify({'error': 'Restaurant not found'}), 404
-
-    restaurant = {
-        "id": row[0],
-        "name": row[1],
-        "address": row[2],
-        "phone_number": row[3],
-        "tabelog_rating": row[4],
-        "tabelog_review_count": row[5],
-        "tabelog_link": row[6],
-        "google_rating": row[7],
-        "google_review_count": row[8],
-        "google_link": row[9],
-        "opening_hours": row[10],
-        "course": row[11],
-        "menu": row[12],
-        "drink_menu": row[13],
-        "store_top_image": row[14],
-        "description": row[15],
-        "longitude": row[16],
-        "latitude": row[17],
-        "area": row[18],
-        "nearest_station": row[19],
-        "directions": row[20],
-        "capacity": row[21],
-        "category": row[22],
-        "budget_min": row[23],
-        "budget_max": row[24],
-        "has_private_room": row[25],
-        "has_drink_all_included": row[26],
-        "detail_image1": row[27],
-        "detail_image2": row[28],
-        "detail_image3": row[29],
-    }
-    return jsonify(restaurant)
-
 @app.route('/api/detailrestaurants', methods=['GET', 'POST'])
 def get_detailed_restaurants():
     if request.method == 'POST':
@@ -282,177 +160,6 @@ def get_detailed_restaurants():
     column_names = [desc[0] for desc in c.description]
     restaurants = [dict(zip(column_names, row)) for row in rows]
     return jsonify({'restaurants': restaurants}), 200
-
-@app.route('/process_query', methods=['POST'])
-def process_query():
-    try:
-        # リクエストボディからパラメータを取得
-        params = request.json
-        area = params.get('area', '').strip()
-        guests = params.get('guests', 0)
-        genre = params.get('genre', '').strip()
-        budget_min = params.get('budgetMin', None)
-        budget_max = params.get('budgetMax', None)
-        private_room = params.get('privateRoom', '').lower()
-        drink_included = params.get('drinkIncluded', '').lower()
-
-        # SQLクエリの構築
-        query = 'SELECT * FROM restaurants WHERE 1=1'
-        sql_params = []
-
-        if area:
-            query += ' AND area = ?'
-            sql_params.append(area)
-        if genre:
-            query += ' AND category LIKE ?'
-            sql_params.append(f'%{genre}%')
-        if guests:
-            query += ' AND capacity >= ?'
-            sql_params.append(guests)
-        if budget_min is not None:
-            query += ' AND budget_min >= ?'
-            sql_params.append(budget_min)
-        if budget_max is not None:
-            query += ' AND budget_max <= ?'
-            sql_params.append(budget_max)
-        if private_room in ['yes', 'no']:
-            query += ' AND has_private_room = ?'
-            sql_params.append(private_room)
-        if drink_included in ['yes', 'no']:
-            query += ' AND has_drink_all_included = ?'
-            sql_params.append(drink_included)
-
-        # データベース接続とクエリの実行
-        conn = sqlite3.connect('example.db')
-        cursor = conn.cursor()
-        cursor.execute(query, sql_params)
-        rows = cursor.fetchall()
-        column_names = [desc[0] for desc in cursor.description]
-        conn.close()
-
-        # 結果をJSON形式で返す
-        restaurants = [dict(zip(column_names, row)) for row in rows]
-        return jsonify({'restaurants': restaurants}), 200
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/restaurant/<int:id>/menu', methods=['GET'])
-def get_menu_details(id):
-    conn = sqlite3.connect('example.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT menu, drink_menu FROM restaurants WHERE id = ?", (id,))
-    row = cursor.fetchone()
-    conn.close()
-
-    if row:
-        return jsonify({
-            "foodMenu": row[0],
-            "drinkMenu": row[1],
-        })
-    return jsonify({"error": "Menu not found"}), 404
-
-# レストランデータを辞書形式に変換する関数
-def format_restaurant(row):
-    return {
-        "id": row[0],
-        "name": row[1],
-        "address": row[2],
-        "phone_number": row[3],
-        "tabelog_rating": row[4],
-        "tabelog_review_count": row[5],
-        "tabelog_link": row[6],
-        "google_rating": row[7],
-        "google_review_count": row[8],
-        "google_link": row[9],
-        "opening_hours": row[10],
-        "course": row[11],
-        "menu": row[12],
-        "drink_menu": row[13],
-        "store_top_image": row[14],
-        "description": row[15],
-        "longitude": row[16],
-        "latitude": row[17],
-        "area": row[18],
-        "nearest_station": row[19],
-        "directions": row[20],
-        "capacity": row[21],
-        "category": row[22],
-        "budget_min": row[23],
-        "budget_max": row[24],
-        "has_private_room": row[25],
-        "has_drink_all_included": row[26],
-        "detail_image1": row[27],
-        "detail_image2": row[28],
-        "detail_image3": row[29],
-    }
-
-@app.route('/result/', methods=['GET'])
-def result_restaurants():
-    try:
-        # データベース接続
-        conn = sqlite3.connect('example.db')
-        cursor = conn.cursor()
-
-        # クエリパラメータを取得
-        restaurant_id = request.args.get('id', None, type=int)
-
-        if restaurant_id:  # ID指定がある場合
-            cursor.execute("SELECT * FROM restaurants WHERE id = ?", (restaurant_id,))
-            row = cursor.fetchone()
-            if row:
-                return jsonify(format_restaurant(row))
-            return jsonify({'error': 'Restaurant not found'}), 404
-
-        # 条件に基づく検索
-        area = request.args.get('area', '').strip()
-        guests = request.args.get('guests', None, type=int)
-        genre = request.args.get('genre', '').strip()
-        budget_min = request.args.get('budgetMin', None, type=int)
-        budget_max = request.args.get('budgetMax', None, type=int)
-        private_room = request.args.get('privateRoom', '').strip().lower()
-        drink_included = request.args.get('drinkIncluded', '').strip().lower()
-
-        # SQLクエリの構築
-        query = "SELECT * FROM restaurants WHERE 1=1"
-        params = []
-
-        if area:
-            query += " AND area = ?"
-            params.append(area)
-        if guests is not None:
-            query += " AND capacity >= ?"
-            params.append(guests)
-        if genre:
-            query += " AND category LIKE ?"
-            params.append(f"%{genre}%")
-        if budget_min is not None:
-            query += " AND budget_min >= ?"
-            params.append(budget_min)
-        if budget_max is not None:
-            query += " AND budget_max <= ?"
-            params.append(budget_max)
-        if private_room in ['yes', 'no']:
-            query += " AND has_private_room = ?"
-            params.append(private_room)
-        if drink_included in ['yes', 'no']:
-            query += " AND has_drink_all_included = ?"
-            params.append(drink_included)
-
-        # クエリの実行
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-
-        # 結果を整形
-        result = [format_restaurant(row) for row in rows]
-        return jsonify(result)
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-    finally:
-        if conn:
-            conn.close()  # 接続を確実に閉じる
 
 def fetch_from_db(query, params):
     """データベースから指定クエリでデータを取得する関数"""
@@ -540,11 +247,6 @@ def get_results():
     except Exception as e:
         # その他のエラー処理
         return jsonify({'error': f'An error occurred: {e}'}), 500
-
-
-@app.route('/list-endpoints', methods=['GET'])
-def list_endpoints():
-    return jsonify([str(rule) for rule in app.url_map.iter_rules()])
 
 if __name__ == '__main__':
         
