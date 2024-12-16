@@ -7,13 +7,13 @@ import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
+app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": "https://tech0-gen-8-step3-app-py-10.azurewebsites.net"}})  # CORS設定を更新
+
 @app.before_request
 def log_request_info():
     logging.debug("Request Headers: %s", request.headers)
     logging.debug("Request Body: %s", request.get_data())
-
-app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "https://tech0-gen-8-step3-app-py-10.azurewebsites.net"}})  # CORS設定を更新
 
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
