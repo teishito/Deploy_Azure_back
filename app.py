@@ -462,7 +462,6 @@ def fetch_from_db(query, params):
 @app.route('/results', methods=['GET'])
 def get_results():
     try:
-        # クエリパラメータ取得
         area = request.args.get('area', '').strip()
         guests = request.args.get('guests', None, type=int)
         genre = request.args.get('genre', '').strip()
@@ -471,10 +470,8 @@ def get_results():
         private_room = request.args.get('privateRoom', '').strip()
         drink_included = request.args.get('drinkIncluded', '').strip()
 
-        # デバッグログ
         print(f"Received parameters: area={area}, guests={guests}, genre={genre}, budgetMin={budget_min}, budgetMax={budget_max}, privateRoom={private_room}, drinkIncluded={drink_included}")
 
-        # SQLクエリ構築
         query = "SELECT * FROM restaurants WHERE 1=1"
         params = []
 
@@ -500,33 +497,19 @@ def get_results():
             query += " AND has_drink_all_included = ?"
             params.append(drink_included)
 
-        # データベースクエリ実行
         conn = sqlite3.connect('example.db')
         cursor = conn.cursor()
         cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
 
-        # 結果整形
-        results = [
-            {
-                "id": row[0],
-                "name": row[1],
-                "address": row[2],
-                "category": row[3],
-                "capacity": row[4],
-                "budget_min": row[5],
-                "budget_max": row[6],
-            }
-            for row in rows
-        ]
-
+        results = [{"id": row[0], "name": row[1], "address": row[2], "category": row[3], "capacity": row[4], "budget_min": row[5], "budget_max": row[6]} for row in rows]
         return jsonify(results), 200
 
     except Exception as e:
-        # エラーハンドリング
         print(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/list-endpoints', methods=['GET'])
 def list_endpoints():
