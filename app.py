@@ -465,31 +465,37 @@ def fetch_from_db(query, params):
 
 @app.route('/results', methods=['GET', 'POST'])
 def get_results():
+    """
+    検索条件に基づくレストラン情報を取得するエンドポイント
+    GET: 全レストランデータを取得
+    POST: 条件に基づいてフィルタリングされたデータを取得
+    """
     try:
         if request.method == 'POST':
-            filters = request.json  # POSTリクエストのボディを取得
-            area = filters.get('area', '')
-            genre = filters.get('genre', '')
-            people = filters.get('people', 0)
+            # POSTリクエストのボディからフィルタ条件を取得
+            filters = request.json
+            area = filters.get('area', '').strip()
+            genre = filters.get('genre', '').strip()
+            guests = filters.get('people', 0)
             private_room = filters.get('privateRoom', '')  # 個室フィルター
             drink_included = filters.get('drinkIncluded', '')  # 飲み放題フィルター
             budget_min = filters.get('budgetMin', None)
             budget_max = filters.get('budgetMax', None)
 
-            # データベースクエリに基づいてフィルタリング
+            # SQLクエリの構築
             query = 'SELECT * FROM restaurants WHERE 1=1'
             params = []
 
-            # フィルタ条件の構築
+            # フィルタ条件の追加
             if area:
                 query += ' AND area = ?'
                 params.append(area)
             if genre:
                 query += ' AND category LIKE ?'
                 params.append(f'%{genre}%')
-            if people:
+            if guests:
                 query += ' AND capacity >= ?'
-                params.append(people)
+                params.append(guests)
             if private_room in ['有', '無']:
                 query += ' AND has_private_room = ?'
                 params.append(private_room)
@@ -503,54 +509,37 @@ def get_results():
                 query += ' AND budget_max <= ?'
                 params.append(budget_max)
 
-            # データベース接続
+            # データベース接続とクエリ実行
             conn = sqlite3.connect('example.db')
-            c = conn.cursor()
-            c.execute(query, params)
-            rows = c.fetchall()
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            column_names = [desc[0] for desc in cursor.description]
             conn.close()
 
-            # レスポンス用にデータを整形
-            if rows:
-                column_names = [desc[0] for desc in c.description]
-                restaurants = [dict(zip(column_names, row)) for row in rows]
-                return jsonify({'restaurants': restaurants}), 200
-            else:
-                return jsonify({'message': '条件に一致するレストランが見つかりませんでした。', 'restaurants': []}), 200
+            # データ整形とレスポンス
+            restaurants = [dict(zip(column_names, row)) for row in rows]
+            return jsonify({'restaurants': restaurants}), 200
 
-        # GETメソッド用の処理（全データ取得）
+        # GETリクエストの場合（全データ取得）
         conn = sqlite3.connect('example.db')
-        c = conn.cursor()
-        c.execute('SELECT * FROM restaurants')
-        rows = c.fetchall()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM restaurants')
+        rows = cursor.fetchall()
+        column_names = [desc[0] for desc in cursor.description]
         conn.close()
 
-        column_names = [desc[0] for desc in c.description]
+        # 全データを整形してレスポンス
         restaurants = [dict(zip(column_names, row)) for row in rows]
         return jsonify({'restaurants': restaurants}), 200
 
-    except Exception as e:
-        # エラー時に上位5件を返す
-        try:
-            conn = sqlite3.connect('example.db')
-            c = conn.cursor()
-            c.execute('SELECT * FROM restaurants LIMIT 5')
-            rows = c.fetchall()
-            conn.close()
+    except sqlite3.Error as db_error:
+        # データベースエラー処理
+        return jsonify({'error': f'Database error: {db_error}'}), 500
 
-            column_names = [desc[0] for desc in c.description]
-            restaurants = [dict(zip(column_names, row)) for row in rows]
-            return jsonify({
-                'error': str(e),
-                'message': '条件に一致するレストランを取得できませんでした。',
-                'fallback_restaurants': restaurants
-            }), 500
-        except Exception as db_error:
-            return jsonify({
-                'error': str(e),
-                'db_error': str(db_error),
-                'message': 'エラーが発生し、上位5件も取得できませんでした。'
-            }), 500
+    except Exception as e:
+        # その他のエラー処理
+        return jsonify({'error': f'An error occurred: {e}'}), 500
 
 
 @app.route('/list-endpoints', methods=['GET'])
