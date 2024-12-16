@@ -471,10 +471,10 @@ def get_results():
         private_room = request.args.get('privateRoom', '').strip()
         drink_included = request.args.get('drinkIncluded', '').strip()
 
-        # デバッグログ（バックエンドで受け取ったパラメータを確認）
+        # デバッグログ
         print(f"Received parameters: area={area}, guests={guests}, genre={genre}, budgetMin={budget_min}, budgetMax={budget_max}, privateRoom={private_room}, drinkIncluded={drink_included}")
 
-        # 空や不正な値を無視してクエリを構築
+        # SQLクエリ構築
         query = "SELECT * FROM restaurants WHERE 1=1"
         params = []
 
@@ -500,8 +500,12 @@ def get_results():
             query += " AND has_drink_all_included = ?"
             params.append(drink_included)
 
-        # データベースクエリの実行
-        rows = fetch_from_db(query, params)
+        # データベースクエリ実行
+        conn = sqlite3.connect('example.db')
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
 
         # 結果整形
         results = [
