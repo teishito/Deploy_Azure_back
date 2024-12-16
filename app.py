@@ -466,8 +466,15 @@ def get_results():
         area = request.args.get('area', '').strip()
         guests = request.args.get('guests', None, type=int)
         genre = request.args.get('genre', '').strip()
+        budget_min = request.args.get('budgetMin', None, type=int)
+        budget_max = request.args.get('budgetMax', None, type=int)
+        private_room = request.args.get('privateRoom', '').strip()
+        drink_included = request.args.get('drinkIncluded', '').strip()
 
-        # SQLクエリ作成
+        # デバッグログ（バックエンドで受け取ったパラメータを確認）
+        print(f"Received parameters: area={area}, guests={guests}, genre={genre}, budgetMin={budget_min}, budgetMax={budget_max}, privateRoom={private_room}, drinkIncluded={drink_included}")
+
+        # 空や不正な値を無視してクエリを構築
         query = "SELECT * FROM restaurants WHERE 1=1"
         params = []
 
@@ -480,8 +487,20 @@ def get_results():
         if genre:
             query += " AND category LIKE ?"
             params.append(f"%{genre}%")
+        if budget_min is not None:
+            query += " AND budget_min >= ?"
+            params.append(budget_min)
+        if budget_max is not None:
+            query += " AND budget_max <= ?"
+            params.append(budget_max)
+        if private_room in ['有', '無']:
+            query += " AND has_private_room = ?"
+            params.append(private_room)
+        if drink_included in ['有', '無']:
+            query += " AND has_drink_all_included = ?"
+            params.append(drink_included)
 
-        # データ取得
+        # データベースクエリの実行
         rows = fetch_from_db(query, params)
 
         # 結果整形
@@ -502,6 +521,7 @@ def get_results():
 
     except Exception as e:
         # エラーハンドリング
+        print(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/list-endpoints', methods=['GET'])
