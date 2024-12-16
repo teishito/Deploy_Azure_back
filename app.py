@@ -8,12 +8,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "https://tech0-gen-8-step3-app-py-10.azurewebsites.net"}})  # CORS設定を更新
-
-@app.before_request
-def log_request_info():
-    logging.debug("Request Headers: %s", request.headers)
-    logging.debug("Request Body: %s", request.get_data())
+CORS(app, resources={r"/*": {"origins": "*"}})  # 全エンドポイントでCORSを許可
 
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
@@ -76,22 +71,28 @@ def get_restaurants():
     restaurants = [dict(zip(column_names, row)) for row in rows]
     return jsonify({'restaurants': restaurants})
 
+@app.before_request
+def log_request_info():
+    logging.debug("Request Headers: %s", request.headers)
+    logging.debug("Request Body: %s", request.get_data(as_text=True))
+
 @app.route('/results', methods=['POST'])
 def get_results():
     """
-    Results.jsからのPOSTリクエストを処理
+    検索クエリに基づいてレストランデータを取得
     """
     try:
         if request.method != 'POST':
             logging.warning("不正なリクエストメソッド: %s", request.method)
             return jsonify({'error': '405 Method Not Allowed'}), 405
 
+        # クエリパラメータの取得
         filters = request.json
-        logging.debug(f"受信したJSON: {json.dumps(filters, ensure_ascii=False)}")
+        logging.debug(f"受信したフィルタ: {filters}")
 
         area = filters.get('area', '').strip()
         genre = filters.get('genre', '').strip()
-        guests = filters.get('people', 0)
+        guests = filters.get('guests', 0)
         budget_min = filters.get('budgetMin', None)
         budget_max = filters.get('budgetMax', None)
         private_room = filters.get('privateRoom', '').strip()
@@ -106,14 +107,14 @@ def get_results():
             params.append(area)
         if genre:
             query += ' AND category LIKE ?'
-            params.append(f'%{genre}%')
+            params.append(f"%{genre}%")
         if guests:
             query += ' AND capacity >= ?'
             params.append(guests)
-        if budget_min is not None:
+        if budget_min:
             query += ' AND budget_min >= ?'
             params.append(budget_min)
-        if budget_max is not None:
+        if budget_max:
             query += ' AND budget_max <= ?'
             params.append(budget_max)
         if private_room in ['有', '無']:
@@ -125,7 +126,7 @@ def get_results():
 
         logging.debug(f"実行クエリ: {query} パラメータ: {params}")
 
-        # データベース操作
+        # データベースクエリ実行
         conn = sqlite3.connect('example.db')
         cursor = conn.cursor()
         cursor.execute(query, params)
@@ -133,17 +134,37 @@ def get_results():
         column_names = [desc[0] for desc in cursor.description]
         conn.close()
 
-        # 結果の整形
+        # 結果整形
         restaurants = [dict(zip(column_names, row)) for row in rows]
-        logging.debug(f"クエリ結果: {restaurants}")
+        logging.debug(f"取得したデータ: {restaurants}")
 
         return jsonify({'restaurants': restaurants}), 200
 
     except Exception as e:
-        logging.error(f"エラー発生: {e}")
-        return jsonify({'error': str(e)}), 500
+        logging.error(f"エラー発生: {str(e)}")
+        return jsonify({'error': 'サーバー内部エラー', 'details': str(e)}), 500
 
+@app.route('/api/restaurants', methods=['GET'])
+def get_default_restaurants():
+    """
+    デフォルトで上位5件のレストランを取得
+    """
+    try:
+        conn = sqlite3.connect('example.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM restaurants LIMIT 5")
+        rows = cursor.fetchall()
+        column_names = [desc[0] for desc in cursor.description]
+        conn.close()
 
+        restaurants = [dict(zip(column_names, row)) for row in rows]
+        logging.debug(f"デフォルトデータ: {restaurants}")
+
+        return jsonify({'restaurants': restaurants}), 200
+
+    except Exception as e:
+        logging.error(f"エラー発生: {str(e)}")
+        return jsonify({'error': 'データベースエラー', 'details': str(e)}), 500
 
 if __name__ == '__main__':
         
