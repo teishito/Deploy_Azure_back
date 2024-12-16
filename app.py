@@ -518,62 +518,39 @@ def get_results():
             else:
                 return jsonify({'message': '条件に一致するレストランが見つかりませんでした。', 'restaurants': []}), 200
 
-        # GETメソッド用の処理（クエリパラメータを使用）
-        elif request.method == 'GET':
-            area = request.args.get('area', '').strip()
-            genre = request.args.get('genre', '').strip()
-            people = request.args.get('people', None, type=int)
-            private_room = request.args.get('privateRoom', '').strip()
-            drink_included = request.args.get('drinkIncluded', '').strip()
-            budget_min = request.args.get('budgetMin', None, type=int)
-            budget_max = request.args.get('budgetMax', None, type=int)
+        # GETメソッド用の処理（全データ取得）
+        conn = sqlite3.connect('example.db')
+        c = conn.cursor()
+        c.execute('SELECT * FROM restaurants')
+        rows = c.fetchall()
+        conn.close()
 
-            # データベースクエリに基づいてフィルタリング
-            query = 'SELECT * FROM restaurants WHERE 1=1'
-            params = []
+        column_names = [desc[0] for desc in c.description]
+        restaurants = [dict(zip(column_names, row)) for row in rows]
+        return jsonify({'restaurants': restaurants}), 200
 
-            if area:
-                query += ' AND area = ?'
-                params.append(area)
-            if genre:
-                query += ' AND category LIKE ?'
-                params.append(f'%{genre}%')
-            if people:
-                query += ' AND capacity >= ?'
-                params.append(people)
-            if private_room in ['有', '無']:
-                query += ' AND has_private_room = ?'
-                params.append(private_room)
-            if drink_included in ['有', '無']:
-                query += ' AND has_drink_all_included = ?'
-                params.append(drink_included)
-            if budget_min is not None:
-                query += ' AND budget_min >= ?'
-                params.append(budget_min)
-            if budget_max is not None:
-                query += ' AND budget_max <= ?'
-                params.append(budget_max)
-
-            # データベース接続
+    except Exception as e:
+        # エラー時に上位5件を返す
+        try:
             conn = sqlite3.connect('example.db')
             c = conn.cursor()
-            c.execute(query, params)
+            c.execute('SELECT * FROM restaurants LIMIT 5')
             rows = c.fetchall()
             conn.close()
 
-            # レスポンス用にデータを整形
-            if rows:
-                column_names = [desc[0] for desc in c.description]
-                restaurants = [dict(zip(column_names, row)) for row in rows]
-                return jsonify({'restaurants': restaurants}), 200
-            else:
-                return jsonify({'message': '条件に一致するレストランが見つかりませんでした。', 'restaurants': []}), 200
-
-    except Exception as e:
-        # エラー発生時の処理
-        print(f"Error: {e}")
-        return jsonify({'error': str(e)}), 500
-
+            column_names = [desc[0] for desc in c.description]
+            restaurants = [dict(zip(column_names, row)) for row in rows]
+            return jsonify({
+                'error': str(e),
+                'message': '条件に一致するレストランを取得できませんでした。',
+                'fallback_restaurants': restaurants
+            }), 500
+        except Exception as db_error:
+            return jsonify({
+                'error': str(e),
+                'db_error': str(db_error),
+                'message': 'エラーが発生し、上位5件も取得できませんでした。'
+            }), 500
 
 
 @app.route('/list-endpoints', methods=['GET'])
