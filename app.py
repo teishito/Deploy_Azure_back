@@ -144,7 +144,7 @@ def get_results():
         logging.error(f"エラー発生: {str(e)}")
         return jsonify({'error': 'サーバー内部エラー', 'details': str(e)}), 500
 
-@app.route('/api/restaurants', methods=['GET'])
+@app.route('/api/allrestaurants', methods=['GET'])
 def get_default_restaurants():
     """
     デフォルトで上位5件のレストランを取得
