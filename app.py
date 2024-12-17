@@ -152,7 +152,7 @@ def get_default_restaurants():
     try:
         conn = sqlite3.connect('example.db')
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM restaurants LIMIT 5")
+        cursor.execute("SELECT * FROM restaurants LIMIT 6")
         rows = cursor.fetchall()
         column_names = [desc[0] for desc in cursor.description]
         conn.close()
