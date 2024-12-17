@@ -80,26 +80,26 @@ def log_request_info():
 
 @app.route('/results', methods=['POST'])
 def get_results():
-    """
-    検索クエリに基づいてレストランデータを取得
-    """
     try:
         if request.method != 'POST':
             logging.warning("不正なリクエストメソッド: %s", request.method)
             return jsonify({'error': '405 Method Not Allowed'}), 405
 
-        # クエリパラメータの取得
+        # クエリパラメータの取得とデコード
         filters = request.json
         logging.debug(f"受信したフィルタ: {filters}")
 
-        # デコード
-        area = unquote(filters.get('area', '').strip())
-        genre = unquote(filters.get('genre', '').strip())
+        area = unquote(filters.get('area', '').strip()) or None
+        genre = unquote(filters.get('genre', '').strip()) or None
         guests = filters.get('guests', 0)
         budget_min = filters.get('budgetMin', None)
         budget_max = filters.get('budgetMax', None)
-        private_room = unquote(filters.get('privateRoom', '').strip())
-        drink_included = unquote(filters.get('drinkIncluded', '').strip())
+        private_room = unquote(filters.get('privateRoom', '').strip()) or None
+        drink_included = unquote(filters.get('drinkIncluded', '').strip()) or None
+
+        logging.debug(f"デコード後のフィルタ: area={area}, genre={genre}, guests={guests}, "
+                      f"budget_min={budget_min}, budget_max={budget_max}, "
+                      f"private_room={private_room}, drink_included={drink_included}")
 
         # SQLクエリの構築
         query = 'SELECT * FROM restaurants WHERE 1=1'
