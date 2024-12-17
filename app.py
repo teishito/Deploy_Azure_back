@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from urllib.parse import unquote
 from flask_cors import CORS
 import os
 import sqlite3
@@ -76,6 +77,7 @@ def log_request_info():
     logging.debug("Request Headers: %s", request.headers)
     logging.debug("Request Body: %s", request.get_data(as_text=True))
 
+
 @app.route('/results', methods=['POST'])
 def get_results():
     """
@@ -90,13 +92,14 @@ def get_results():
         filters = request.json
         logging.debug(f"受信したフィルタ: {filters}")
 
-        area = filters.get('area', '').strip()
-        genre = filters.get('genre', '').strip()
+        # デコード
+        area = unquote(filters.get('area', '').strip())
+        genre = unquote(filters.get('genre', '').strip())
         guests = filters.get('guests', 0)
         budget_min = filters.get('budgetMin', None)
         budget_max = filters.get('budgetMax', None)
-        private_room = filters.get('privateRoom', '').strip()
-        drink_included = filters.get('drinkIncluded', '').strip()
+        private_room = unquote(filters.get('privateRoom', '').strip())
+        drink_included = unquote(filters.get('drinkIncluded', '').strip())
 
         # SQLクエリの構築
         query = 'SELECT * FROM restaurants WHERE 1=1'
