@@ -147,28 +147,6 @@ def get_results():
         logging.error(f"エラー発生: {str(e)}")
         return jsonify({'error': 'サーバー内部エラー', 'details': str(e)}), 500
 
-@app.route('/api/allrestaurants', methods=['GET'])
-def get_default_restaurants():
-    """
-    デフォルトで上位5件のレストランを取得
-    """
-    try:
-        conn = sqlite3.connect('example.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM restaurants LIMIT 6")
-        rows = cursor.fetchall()
-        column_names = [desc[0] for desc in cursor.description]
-        conn.close()
-
-        restaurants = [dict(zip(column_names, row)) for row in rows]
-        logging.debug(f"デフォルトデータ: {restaurants}")
-
-        return jsonify({'restaurants': restaurants}), 200
-
-    except Exception as e:
-        logging.error(f"エラー発生: {str(e)}")
-        return jsonify({'error': 'データベースエラー', 'details': str(e)}), 500
-
 @app.route('/restaurant/<int:id>', methods=['GET'])
 def get_restaurant_by_id(id):
     conn = sqlite3.connect('example.db')
