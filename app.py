@@ -193,6 +193,21 @@ def get_restaurant_by_id(id):
     }
     return jsonify(restaurant)
 
+@app.route('/restaurant/<int:id>/menu', methods=['GET'])
+def get_menu_details(id):
+    conn = sqlite3.connect('example.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT menu, drink_menu FROM restaurants WHERE id = ?", (id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return jsonify({
+            "foodMenu": row[0],
+            "drinkMenu": row[1],
+        })
+    return jsonify({"error": "Menu not found"}), 404
+
 if __name__ == '__main__':
         
     port = int(os.environ.get('PORT', 8000))  # 環境変数PORTが設定されていない場合、デフォルトで8000を使用
