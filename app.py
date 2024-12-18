@@ -243,13 +243,12 @@ def get_favorites():
         conn = sqlite3.connect('example.db')
         cursor = conn.cursor()
 
-        # お気に入りのデータを取得
-        # この例では、`favorites` テーブルが存在し、お気に入りの店舗 ID を保持していると仮定
+        # 上から5番目のデータを取得
         cursor.execute("""
-            SELECT r.id, r.name, r.category, r.area, r.tabelog_rating, r.google_rating, 
-                   r.budget_min, r.budget_max, r.store_top_image
-            FROM favorites f
-            JOIN restaurants r ON f.restaurant_id = r.id
+            SELECT id, name, category, area, tabelog_rating, google_rating, 
+                   budget_min, budget_max, store_top_image
+            FROM restaurants
+            LIMIT 5 OFFSET 4
         """)
         rows = cursor.fetchall()
         column_names = [desc[0] for desc in cursor.description]
@@ -269,19 +268,8 @@ def get_favorites():
 @app.route('/api/favorites/<int:restaurant_id>', methods=['DELETE'])
 def remove_favorite(restaurant_id):
     try:
-        # データベース接続
-        conn = sqlite3.connect('example.db')
-        cursor = conn.cursor()
-
-        # お気に入りから削除
-        cursor.execute("DELETE FROM favorites WHERE restaurant_id = ?", (restaurant_id,))
-        conn.commit()
-        conn.close()
-
+        # ダミーデータを使用するので削除処理は単に成功レスポンスを返す
         return jsonify({"message": "Favorite removed successfully"}), 200
-
-    except sqlite3.Error as e:
-        return jsonify({"error": "Database error", "details": str(e)}), 500
 
     except Exception as e:
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
