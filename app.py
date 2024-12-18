@@ -195,18 +195,47 @@ def get_restaurant_by_id(id):
 
 @app.route('/restaurant/<int:id>/menu', methods=['GET'])
 def get_menu_details(id):
-    conn = sqlite3.connect('example.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT menu, drink_menu FROM restaurants WHERE id = ?", (id,))
-    row = cursor.fetchone()
-    conn.close()
+    try:
+        # データベース接続
+        conn = sqlite3.connect('example.db')
+        cursor = conn.cursor()
 
-    if row:
+        # メニューとドリンクメニューを取得
+        cursor.execute("SELECT menu, drink_menu FROM restaurants WHERE id = ?", (id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        # データが見つからない場合
+        if not row:
+            return jsonify({"error": "Menu not found"}), 404
+
+        # データ形式の処理
+        food_menu = row[0]
+        drink_menu = row[1]
+
+        # JSON文字列で保存されている場合
+        try:
+            food_menu = json.loads(food_menu) if food_menu else []
+            drink_menu = json.loads(drink_menu) if drink_menu else []
+        except json.JSONDecodeError:
+            # カンマ区切りの場合
+            food_menu = food_menu.split(",") if food_menu else []
+            drink_menu = drink_menu.split(",") if drink_menu else []
+
+        # メニューを返却
         return jsonify({
-            "foodMenu": row[0],
-            "drinkMenu": row[1],
-        })
-    return jsonify({"error": "Menu not found"}), 404
+            "foodMenu": food_menu,
+            "drinkMenu": drink_menu,
+        }), 200
+
+    except sqlite3.Error as e:
+        # データベースエラー時の処理
+        return jsonify({"error": "Database error", "details": str(e)}), 500
+
+    except Exception as e:
+        # その他の例外処理
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
 
 if __name__ == '__main__':
         
