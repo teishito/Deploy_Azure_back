@@ -236,6 +236,56 @@ def get_menu_details(id):
         # その他の例外処理
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
+@app.route('/api/favorites', methods=['GET'])
+def get_favorites():
+    try:
+        # データベース接続
+        conn = sqlite3.connect('example.db')
+        cursor = conn.cursor()
+
+        # お気に入りのデータを取得
+        # この例では、`favorites` テーブルが存在し、お気に入りの店舗 ID を保持していると仮定
+        cursor.execute("""
+            SELECT r.id, r.name, r.category, r.area, r.tabelog_rating, r.google_rating, 
+                   r.budget_min, r.budget_max, r.store_top_image
+            FROM favorites f
+            JOIN restaurants r ON f.restaurant_id = r.id
+        """)
+        rows = cursor.fetchall()
+        column_names = [desc[0] for desc in cursor.description]
+        conn.close()
+
+        # データ整形
+        favorites = [dict(zip(column_names, row)) for row in rows]
+        return jsonify({"favorites": favorites}), 200
+
+    except sqlite3.Error as e:
+        return jsonify({"error": "Database error", "details": str(e)}), 500
+
+    except Exception as e:
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
+
+@app.route('/api/favorites/<int:restaurant_id>', methods=['DELETE'])
+def remove_favorite(restaurant_id):
+    try:
+        # データベース接続
+        conn = sqlite3.connect('example.db')
+        cursor = conn.cursor()
+
+        # お気に入りから削除
+        cursor.execute("DELETE FROM favorites WHERE restaurant_id = ?", (restaurant_id,))
+        conn.commit()
+        conn.close()
+
+        return jsonify({"message": "Favorite removed successfully"}), 200
+
+    except sqlite3.Error as e:
+        return jsonify({"error": "Database error", "details": str(e)}), 500
+
+    except Exception as e:
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
 
 if __name__ == '__main__':
         
